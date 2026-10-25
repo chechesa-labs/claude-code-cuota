@@ -156,6 +156,13 @@ test('temporal sin lectura no cambia nada', async ($, on) => {
   expect((await $.command.run(cuota('lista'))).text).toBe('Ninguna carpeta tiene límite propio.')
 })
 
+test('una sesión frenada se libera sola cuando pasa la hora de reinicio', async ($, on) => {
+  // La lectura dice 83%, pero su ventana se reinició a las 19:00 y el reloj marca 20:00.
+  motor(on, [{ kind: 'five_hour', percentUsed: 83, resetsAt: '2026-10-24T19:00:00Z' }])
+  await $.session.start(arrancar)
+  expect(await $.prompt.submit(prompt('sigo'))).toEqual({ text: 'sigo' })
+})
+
 test('una sesión nueva sin lectura usa la última guardada mientras siga vigente', async ($, on) => {
   // Lo que dejó otra sesión: la semana sigue vigente, la de 5 h ya reinició (el reloj marca 20:00).
   const pantalla = motor(on, [], {

@@ -129,6 +129,7 @@ async function avisarAgentes($: EngineInterface) {
 /** Recalcula el estado, pinta la línea y avisa en las transiciones. */
 async function refrescar($: EngineInterface) {
   await asegurarCarpeta($)
+  await lecturaVigente($)
   const propios = await propiosCarpeta($)
   const ev = evaluar(lectura, ajustes, propios)
   $.ui.status(lineaDeEstado(lectura, ev, ajustes, idioma, propios))
@@ -158,11 +159,15 @@ async function tomar($: EngineInterface, limites: readonly SessionRateLimit[]) {
   await $.store.set(CLAVE_LECTURA, lectura)
 }
 
-/** Al arrancar no hay lectura hasta la primera respuesta: se usa la guardada mientras siga vigente. */
-async function lecturaGuardada($: EngineInterface) {
+/**
+ * La última lectura de cualquier sesión, sin las ventanas cuyo reinicio ya pasó. Sin esto, una sesión
+ * frenada se quedaba con el porcentaje viejo para siempre: solo se mide tras una respuesta, y el freno
+ * no deja que haya respuesta.
+ */
+async function lecturaVigente($: EngineInterface) {
   const v = await $.store.get(CLAVE_LECTURA)
-  if (v === null || typeof v !== 'object') return
-  lectura = vigente(v as Lectura, await $.clock.now())
+  const base = v !== null && typeof v === 'object' ? (v as Lectura) : lectura
+  lectura = vigente(base, await $.clock.now())
 }
 
 /** `auto` sigue el ajuste `language` de Claude Code; `es` o `en` lo fijan. */
@@ -264,7 +269,7 @@ export const register: Register = (on, options) => {
     carpeta = await raizDe($, e.cwd)
     const { rateLimits } = await $.session.usage()
     if (rateLimits.length > 0) await tomar($, rateLimits)
-    else await lecturaGuardada($)
+    else await lecturaVigente($)
     await refrescar($)
     return r
   })

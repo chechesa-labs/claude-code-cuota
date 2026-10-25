@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 (2026-10-25)
+
+- Fix: a braked session stayed braked after the window reset, because the usage reading only refreshes after a response and the brake held every message. The reading now expires at its reset time and is shared with the latest one from any session.
+
 ## 0.2.0 (2026-10-25)
 
 - Several folders at once: `/cuota 85 lora-baker nova`, `/cuota default over-80`, `/cuota default all`. Folders are named by their short name, shown by `/cuota list` (parent/name when two folders share a name); if a name is unknown or ambiguous, nothing changes.

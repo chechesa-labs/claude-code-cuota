@@ -5,17 +5,22 @@ import {
   type Idioma,
   type Lectura,
   type Politica,
+  type Objetivo,
   type VentanaId,
+  aplicar,
+  buscar,
   claveDe,
   evaluar,
   idiomaDe,
   informe,
   leer,
   lineaDeEstado,
+  nombresCortos,
   ordenDe,
   padreDe,
   propiosDe,
   siguienteNivel,
+  sinVencidos,
   textos,
   topeDe,
   vigente,
@@ -38,9 +43,39 @@ let ultimo: Estado = 'sin-datos'
 let avisoCincoDado = false
 const agentesAvisados = new Set<string>()
 
+/** Las políticas guardadas, con los límites temporales vencidos ya regresados a su valor anterior. */
 async function politicas($: EngineInterface): Promise<Politicas> {
   const v = await $.store.get(CLAVE_STORE)
-  return v !== null && typeof v === 'object' ? (v as Politicas) : {}
+  const guardadas = v !== null && typeof v === 'object' ? (v as Politicas) : {}
+  const { todas, cambio } = sinVencidos(guardadas, await $.clock.now())
+  if (cambio) await $.store.set(CLAVE_STORE, todas)
+  return todas
+}
+
+/** Las claves de carpeta a las que va un cambio, o el texto que explica por qué no se cambió nada. */
+function destinos(todas: Politicas, raiz: string, ventana: VentanaId, objetivo?: Objetivo): string[] | string {
+  if (objetivo === undefined) return [claveDe(raiz)]
+  const propio = (k: string) => propiosDe(todas[k])?.[ventana]
+  if (objetivo.tipo === 'todas' || objetivo.tipo === 'sobre') {
+    const sobre = objetivo.tipo === 'sobre' ? objetivo.n : undefined
+    const claves = Object.keys(todas).filter(k => {
+      const n = propio(k)
+      return n !== undefined && (sobre === undefined || n > sobre)
+    })
+    return claves.length > 0 ? claves : textos.ninguna(idioma, ventana, sobre)
+  }
+  // Por nombre: entre las carpetas con límite propio y la actual. Si un nombre falla, no se cambia ninguna.
+  const rutas = [...new Set([...Object.values(todas).map(p => p.ruta), raiz].map(r => r))]
+  const unicas = [...new Map(rutas.map(r => [claveDe(r), r])).values()]
+  const cortos = nombresCortos(unicas)
+  const claves = new Set<string>()
+  for (const nombre of objetivo.nombres) {
+    const hallados = buscar(nombre, unicas)
+    if (hallados.length === 0) return textos.noEncontre(idioma, nombre)
+    if (hallados.length > 1) return textos.ambiguo(idioma, nombre, hallados.map(r => cortos.get(r) ?? r))
+    claves.add(claveDe(hallados[0]))
+  }
+  return [...claves]
 }
 
 async function propiosCarpeta($: EngineInterface) {
@@ -173,24 +208,40 @@ async function correrComando($: EngineInterface, args: string, ventana: VentanaI
     return todas.length === 0 ? textos.sinPropias(idioma) : textos.lista(idioma, todas)
   }
 
+  let temporal: { hasta: string; despues: number } | undefined
   if (orden.tipo === 'fijar' || orden.tipo === 'quitar') {
     const todas = await politicas($)
-    const clave = claveDe(raiz)
+    const claves = destinos(todas, raiz, ventana, orden.objetivo)
+    if (typeof claves === 'string') return claves
+    const tope = orden.tipo === 'fijar' ? orden.tope : undefined
+    const hasta = orden.tipo === 'fijar' && orden.temporal ? lectura[ventana]?.reinicio : undefined
+    if (orden.tipo === 'fijar' && orden.temporal && hasta === undefined) return textos.sinReinicio(idioma, ventana)
     const desde = new Date(await $.clock.now()).toISOString().slice(0, 10)
-    // El `tope` de la v0.1 valía para las dos ventanas: se reparte antes de cambiar una.
-    const previos = propiosDe(todas[clave]) ?? {}
-    const nueva: Politica = { ...previos, ruta: raiz, desde }
-    if (orden.tipo === 'fijar') nueva[ventana] = orden.tope
-    else delete nueva[ventana]
-    if (nueva.cinco === undefined && nueva.semana === undefined) delete todas[clave]
-    else todas[clave] = nueva
+    // Los nombres cortos se sacan de todas las carpetas conocidas, igual que en /cuota lista.
+    const conocidas = [...Object.values(todas).map(p => p.ruta), raiz]
+    const rutas: string[] = []
+    for (const clave of claves) {
+      const ruta = todas[clave]?.ruta ?? raiz
+      rutas.push(ruta)
+      const nueva = aplicar(todas[clave], ruta, ventana, tope, desde, hasta)
+      if (nueva === undefined) delete todas[clave]
+      else todas[clave] = nueva
+    }
     await $.store.set(CLAVE_STORE, todas)
-    await avisar($, 'politica', { ventana, tope: orden.tipo === 'fijar' ? orden.tope : null })
+    await avisar($, 'politica', { ventana, tope: tope ?? null, carpetas: rutas, ...(hasta ? { hasta } : {}) })
+    if (orden.objetivo !== undefined) {
+      await refrescar($)
+      const cortos = nombresCortos([...new Map(conocidas.map(r => [claveDe(r), r])).values()])
+      const defecto = ventana === 'cinco' ? ajustes.topeCinco : ajustes.topeSemana
+      return textos.enLote(idioma, ventana, tope, defecto, rutas.map(r => cortos.get(r) ?? r), hasta)
+    }
+    const t = todas[claveDe(raiz)]?.temporal?.[ventana]
+    if (t) temporal = { hasta: t.hasta, despues: t.antes ?? (ventana === 'cinco' ? ajustes.topeCinco : ajustes.topeSemana) }
   }
 
   const { ev, propios } = await refrescar($)
   const cambio = orden.tipo === 'fijar' || orden.tipo === 'quitar' ? ventana : undefined
-  return informe(raiz, lectura, ev, ajustes, idioma, propios, cambio)
+  return informe(raiz, lectura, ev, ajustes, idioma, propios, cambio, temporal)
 }
 
 export const register: Register = (on, options) => {

@@ -98,14 +98,62 @@ test('una política de la v0.1 sigue valiendo para las dos ventanas', async ($, 
 test('cambiar el límite confirma el cambio y /quota es el mismo comando', async ($, on) => {
   motor(on, [{ kind: 'five_hour', percentUsed: 83 }], {})
   await $.session.start(arrancar)
-  const subir = (await $.command.run(cuota('90'))).text
+  const subir = (await $.command.run(cuota('90'))).text ?? ''
   expect(subir.split('\n')[0]).toBe('Listo: el límite de 5 h de esta carpeta ahora es 90%.')
   expect(subir).toContain('5 h: 83% usado · límite 90% (propio de esta carpeta)')
   expect(subir).not.toContain('Para cambiarlo')
-  const libre = (await $.command.run({ ...cuota('100'), command: 'quota' })).text
+  const libre = (await $.command.run({ ...cuota('100'), command: 'quota' })).text ?? ''
   expect(libre.split('\n')[0]).toBe('Listo: esta carpeta ya no tiene límite de 5 h.')
-  const vuelta = (await $.command.run(cuota('default'))).text
+  const vuelta = (await $.command.run(cuota('default'))).text ?? ''
   expect(vuelta.split('\n')[0]).toBe('Listo: el límite de 5 h de esta carpeta regresó al de todas las carpetas (80%).')
+})
+
+const varias = {
+  '/hobby/nova': { cinco: 60, semana: 60, ruta: '/hobby/nova', desde: '2026-10-20' },
+  '/IA/lora-baker': { cinco: 100, ruta: '/IA/lora-baker', desde: '2026-10-20' },
+  '/IA/cuota': { cinco: 92, ruta: '/IA/cuota', desde: '2026-10-20' },
+  '/clientes/cuota': { cinco: 85, semana: 90, ruta: '/clientes/cuota', desde: '2026-10-20' },
+}
+
+test('en lote: lista con nombres cortos, cambiar por nombre y regresar las de arriba de 80%', async ($, on) => {
+  motor(on, [{ kind: 'five_hour', percentUsed: 40 }], { politicas: varias })
+  await $.session.start(arrancar)
+  const lista = (await $.command.run(cuota('lista'))).text ?? ''
+  expect(lista).toContain('  IA/cuota: 5 h 92% · semana el de todas (/IA/cuota)')
+  expect(lista).toContain('  nova: 5 h 60% · semana 60% (/hobby/nova)')
+
+  expect((await $.command.run(cuota('85 cuota'))).text).toContain('coincide con varias carpetas: IA/cuota, clientes/cuota')
+  expect((await $.command.run(cuota('85 nada'))).text).toContain('No encontré "nada"')
+
+  expect((await $.command.run(cuota('85 lora-baker ia/cuota'))).text).toBe('Listo: límite 85% de 5 h en lora-baker, IA/cuota.')
+  expect((await $.command.run(cuota('default sobre-80'))).text).toBe(
+    'Listo: regresaron al límite de 5 h de todas las carpetas (80%): lora-baker, IA/cuota, clientes/cuota.',
+  )
+  const despues = (await $.command.run(cuota('lista'))).text ?? ''
+  expect(despues).toContain('nova: 5 h 60%')
+  expect(despues).toContain('  cuota: 5 h el de todas · semana 90% (/clientes/cuota)')
+  expect(despues).not.toContain('lora-baker')
+  expect((await $.command.run(cuota('default over 80'))).text).toContain('Ninguna carpeta tiene límite de 5 h arriba de 80%')
+  expect((await $.command.run(semanal('default todas'))).text).toBe(
+    'Listo: regresaron al límite semanal de todas las carpetas (80%): nova, cuota.',
+  )
+})
+
+test('temporal: sube hasta el reinicio y después regresa solo al valor de antes', async ($, on) => {
+  motor(on, [{ kind: 'five_hour', percentUsed: 85, resetsAt: '2026-10-24T22:00:00Z' }], {
+    politicas: { '/proyectos/cliente': { cinco: 60, ruta: '/proyectos/cliente', desde: '2026-10-20' } },
+  })
+  await $.session.start(arrancar)
+  const r = (await $.command.run(cuota('100 temporal'))).text ?? ''
+  expect(r.split('\n')[0]).toMatch(/^Listo: esta carpeta no tiene límite de 5 h hasta que se reinicie la ventana \(.+\); después regresa a 60%\.$/)
+  expect((await $.command.run(cuota('lista'))).text).toMatch(/cliente: 5 h sin límite hasta .+ · semana el de todas/)
+})
+
+test('temporal sin lectura no cambia nada', async ($, on) => {
+  motor(on, [])
+  await $.session.start(arrancar)
+  expect((await $.command.run(cuota('90 temporal'))).text).toContain('no sé cuándo se reinicia')
+  expect((await $.command.run(cuota('lista'))).text).toBe('Ninguna carpeta tiene límite propio.')
 })
 
 test('una sesión nueva sin lectura usa la última guardada mientras siga vigente', async ($, on) => {

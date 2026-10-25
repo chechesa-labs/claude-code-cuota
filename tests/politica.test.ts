@@ -1,4 +1,5 @@
 import { expect, test } from 'claude-code/testing'
+import { aplicar, buscar, nombresCortos, sinVencidos } from '../hooks/politica'
 import {
   claveDe,
   comandoDe,
@@ -82,6 +83,13 @@ test('órdenes de los comandos', () => {
   expect(ordenDe('reset')).toEqual({ tipo: 'quitar' })
   expect(ordenDe('quitar')).toEqual({ tipo: 'quitar' })
   expect(ordenDe('150').tipo).toBe('ayuda')
+  expect(ordenDe('default todas')).toEqual({ tipo: 'quitar', objetivo: { tipo: 'todas' } })
+  expect(ordenDe('default sobre-80')).toEqual({ tipo: 'quitar', objetivo: { tipo: 'sobre', n: 80 } })
+  expect(ordenDe('default over 80%')).toEqual({ tipo: 'quitar', objetivo: { tipo: 'sobre', n: 80 } })
+  expect(ordenDe('85 Lora-Baker nova')).toEqual({ tipo: 'fijar', tope: 85, objetivo: { tipo: 'nombres', nombres: ['lora-baker', 'nova'] } })
+  expect(ordenDe('100 temporal')).toEqual({ tipo: 'fijar', tope: 100, temporal: true })
+  expect(ordenDe('90 todas').tipo).toBe('ayuda')
+  expect(ordenDe('default temporal').tipo).toBe('ayuda')
 })
 
 test('comando de cada ventana según el idioma', () => {
@@ -114,4 +122,23 @@ test('idioma de la interfaz según el ajuste language', () => {
   expect(idiomaDe('english')).toBe('en')
   expect(idiomaDe('japanese')).toBe('en')
   expect(idiomaDe(undefined)).toBe('en')
+})
+
+test('nombres cortos, búsqueda y vencimiento de los temporales', () => {
+  const rutas = ['/IA/cuota', '/clientes/cuota', '/IA/lora-baker']
+  const cortos = nombresCortos(rutas)
+  expect([...cortos.values()]).toEqual(['IA/cuota', 'clientes/cuota', 'lora-baker'])
+  expect(buscar('cuota', rutas)).toEqual(['/IA/cuota', '/clientes/cuota'])
+  expect(buscar('ia/CUOTA', rutas)).toEqual(['/IA/cuota'])
+  expect(buscar('uota', rutas)).toEqual([])
+
+  const sube = aplicar({ cinco: 60, ruta: '/h', desde: 'x' }, '/h', 'cinco', 100, 'y', '2026-10-24T22:00:00Z')
+  expect(sube).toEqual({ cinco: 100, temporal: { cinco: { hasta: '2026-10-24T22:00:00Z', antes: 60 } }, ruta: '/h', desde: 'y' })
+  const antes = sinVencidos({ '/h': sube! }, Date.parse('2026-10-24T21:00:00Z'))
+  expect(antes.cambio).toBe(false)
+  const despues = sinVencidos({ '/h': sube! }, Date.parse('2026-10-24T22:00:01Z'))
+  expect(despues).toEqual({ todas: { '/h': { cinco: 60, ruta: '/h', desde: 'y' } }, cambio: true })
+  // Sin valor previo, al vencer la carpeta vuelve al de todas y deja de tener política.
+  const sola = aplicar(undefined, '/n', 'semana', 90, 'y', '2026-10-24T22:00:00Z')
+  expect(sinVencidos({ '/n': sola! }, Date.parse('2026-10-25T00:00:00Z')).todas).toEqual({})
 })

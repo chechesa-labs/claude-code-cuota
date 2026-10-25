@@ -19,8 +19,18 @@ export type Lectura = { cinco?: Ventana; semana?: Ventana }
 /** Los límites propios de una carpeta; la ventana que no tenga usa el de todas las carpetas. */
 export type TopesCarpeta = { cinco?: number; semana?: number }
 
+/** Un límite subido "temporal": vale hasta el reinicio de la ventana y luego vuelve a `antes` (sin `antes`, al de todas). */
+export type Temporal = { hasta: string; antes?: number }
+
 /** Lo que se guarda por carpeta. `tope` es de la v0.1, cuando un número valía para las dos ventanas. */
-export type Politica = { cinco?: number; semana?: number; tope?: number; ruta: string; desde: string }
+export type Politica = {
+  cinco?: number
+  semana?: number
+  tope?: number
+  temporal?: { cinco?: Temporal; semana?: Temporal }
+  ruta: string
+  desde: string
+}
 
 export type Estado = 'sin-datos' | 'normal' | 'cerrando' | 'frenado' | 'libre'
 
@@ -132,26 +142,124 @@ export const padreDe = (ruta: string) => {
   return padre === '' ? r[corte] : padre
 }
 
+/** A qué carpetas va un cambio; sin objetivo, a la carpeta actual. */
+export type Objetivo = { tipo: 'todas' } | { tipo: 'sobre'; n: number } | { tipo: 'nombres'; nombres: string[] }
+
 /** Interpreta lo que viene después de `/cuota` o `/cuotasemanal`. */
 export type Orden =
   | { tipo: 'ver' }
-  | { tipo: 'fijar'; tope: number }
-  | { tipo: 'quitar' }
+  | { tipo: 'fijar'; tope: number; objetivo?: Objetivo; temporal?: true }
+  | { tipo: 'quitar'; objetivo?: Objetivo }
   | { tipo: 'lista' }
   | { tipo: 'ayuda'; error?: string }
+
+const numero = (t: string) => {
+  if (!/^\d{1,3}%?$/.test(t)) return undefined
+  const n = parseInt(t, 10)
+  return n >= 1 && n <= 100 ? n : undefined
+}
 
 export const ordenDe = (args: string): Orden => {
   const a = args.trim().toLowerCase().replace(/\s*%$/, '')
   if (a === '') return { tipo: 'ver' }
-  if (['default', 'reset', 'quitar', 'remove'].includes(a)) return { tipo: 'quitar' }
   if (['lista', 'list', 'todas', 'all'].includes(a)) return { tipo: 'lista' }
-  if (['libre', 'free'].includes(a)) return { tipo: 'fijar', tope: 100 }
   if (['ayuda', 'help', '?'].includes(a)) return { tipo: 'ayuda' }
-  if (/^\d{1,3}$/.test(a)) {
-    const n = Number(a)
-    if (n >= 1 && n <= 100) return { tipo: 'fijar', tope: n }
+
+  const [primero, ...resto] = a.split(/\s+/)
+  const error = { tipo: 'ayuda', error: a } as const
+  let base: { tipo: 'fijar'; tope: number } | { tipo: 'quitar' }
+  if (['default', 'reset', 'quitar', 'remove'].includes(primero)) base = { tipo: 'quitar' }
+  else if (['libre', 'free'].includes(primero)) base = { tipo: 'fijar', tope: 100 }
+  else {
+    const n = numero(primero)
+    if (n === undefined) return error
+    base = { tipo: 'fijar', tope: n }
   }
-  return { tipo: 'ayuda', error: a }
+
+  let objetivo: Objetivo | undefined
+  let temporal = false
+  const nombres: string[] = []
+  for (let i = 0; i < resto.length; i++) {
+    const t = resto[i]
+    const pegado = /^(?:sobre|over|>)-?(\d{1,3})%?$/.exec(t)
+    if (['temporal', 'temp'].includes(t)) temporal = true
+    else if (['todas', 'all'].includes(t)) objetivo = { tipo: 'todas' }
+    else if (pegado) objetivo = { tipo: 'sobre', n: Number(pegado[1]) }
+    else if (['sobre', 'over', '>'].includes(t) && numero(resto[i + 1] ?? '') !== undefined) {
+      objetivo = { tipo: 'sobre', n: numero(resto[++i]) as number }
+    } else nombres.push(t)
+  }
+  if (nombres.length > 0) {
+    if (objetivo) return error
+    objetivo = { tipo: 'nombres', nombres }
+  }
+  // "Todas" y "sobre" son para regresar al default; subir se hace por nombre.
+  if (base.tipo === 'fijar' && objetivo && objetivo.tipo !== 'nombres') return error
+  if (temporal && base.tipo !== 'fijar') return error
+  return { ...base, ...(objetivo ? { objetivo } : {}), ...(temporal ? { temporal: true as const } : {}) }
+}
+
+/** La política de una carpeta después de cambiar una ventana; `undefined` si ya no le queda nada propio. */
+export const aplicar = (
+  p: Politica | undefined,
+  ruta: string,
+  ventana: VentanaId,
+  tope: number | undefined,
+  desde: string,
+  hasta?: string,
+): Politica | undefined => {
+  const previos = propiosDe(p) ?? {}
+  const temporal = { ...p?.temporal }
+  // Un temporal sobre otro temporal regresa al valor de antes del primero.
+  const antes = temporal[ventana] ? temporal[ventana].antes : previos[ventana]
+  delete temporal[ventana]
+  const nueva: Politica = { ...previos, ruta: p?.ruta ?? ruta, desde }
+  if (tope === undefined) delete nueva[ventana]
+  else nueva[ventana] = tope
+  if (hasta) temporal[ventana] = antes === undefined ? { hasta } : { hasta, antes }
+  if (temporal.cinco || temporal.semana) nueva.temporal = temporal
+  return nueva.cinco === undefined && nueva.semana === undefined ? undefined : nueva
+}
+
+/** Regresa a su valor anterior los límites temporales cuya ventana ya se reinició. */
+export const sinVencidos = (todas: Record<string, Politica>, ahora: number) => {
+  let cambio = false
+  const r: Record<string, Politica> = {}
+  for (const [clave, p] of Object.entries(todas)) {
+    let q: Politica | undefined = p
+    for (const v of ['cinco', 'semana'] as const) {
+      const t = q?.temporal?.[v]
+      if (q === undefined || t === undefined || Date.parse(t.hasta) > ahora) continue
+      cambio = true
+      q = aplicar(q, q.ruta, v, t.antes, q.desde)
+    }
+    if (q) r[clave] = q
+  }
+  return { todas: r, cambio }
+}
+
+const segmentos = (ruta: string) => claveDe(ruta).split('/').filter(Boolean)
+
+/** El nombre corto de cada ruta: el de la carpeta, o padre/carpeta si el nombre se repite. */
+export const nombresCortos = (rutas: readonly string[]) => {
+  const ultimo = (r: string) => segmentos(r).slice(-1)[0] ?? r
+  const cuenta = new Map<string, number>()
+  for (const r of rutas) cuenta.set(ultimo(r).toLowerCase(), (cuenta.get(ultimo(r).toLowerCase()) ?? 0) + 1)
+  const corto = new Map<string, string>()
+  for (const r of rutas) {
+    const s = r.replace(/\\/g, '/').replace(/\/+$/, '').split('/').filter(Boolean)
+    corto.set(r, (cuenta.get(ultimo(r).toLowerCase()) ?? 0) > 1 ? s.slice(-2).join('/') : (s.slice(-1)[0] ?? r))
+  }
+  return corto
+}
+
+/** Las rutas que terminan en `nombre` (una carpeta o padre/carpeta), sin distinguir mayúsculas. */
+export const buscar = (nombre: string, rutas: readonly string[]) => {
+  const n = segmentos(nombre).join('/').toLowerCase()
+  return rutas.filter(r => {
+    const k = segmentos(r).join('/').toLowerCase()
+    return n !== '' && (k === n || k.endsWith('/' + n))
+  })
 }
 
 // ---------------------------------------------------------------- textos
@@ -282,7 +390,12 @@ export const textos = {
             `  ${col('/cuota 100')} deja la ventana de 5 h sin límite (también: libre)`,
             `  ${col('/cuota default')} regresa la de 5 h al límite de todas las carpetas`,
             `  ${col(`${s} default`)} lo mismo con la semanal`,
-            `  ${col('/cuota lista')} las carpetas con límite propio`,
+            `  ${col('/cuota lista')} las carpetas con límite propio y su nombre corto`,
+            `  ${col('/cuota 100 temporal')} sin límite hasta que se reinicie la ventana; después regresa solo`,
+            `  ${col('/cuota 85 lora-baker nova')} cambia varias carpetas por su nombre`,
+            `  ${col('/cuota default lora-baker nova')} regresa varias carpetas al límite de todas`,
+            `  ${col('/cuota default sobre-80')} regresa solo las que están arriba de 80%`,
+            `  ${col('/cuota default todas')} regresa todas las carpetas`,
           ]
         : [
             'Plan usage cap per folder. /cuota is for the 5-hour window and ' + s + ' for the weekly one. Commands:',
@@ -292,7 +405,12 @@ export const textos = {
             `  ${col('/cuota 100')} removes the 5-hour cap (also: free)`,
             `  ${col('/cuota default')} back to the default 5-hour cap`,
             `  ${col(`${s} default`)} the same for the weekly cap`,
-            `  ${col('/cuota list')} folders with their own caps`,
+            `  ${col('/cuota list')} folders with their own caps and their short names`,
+            `  ${col('/cuota 100 temp')} no cap until the window resets; then it goes back by itself`,
+            `  ${col('/cuota 85 lora-baker nova')} changes several folders by name`,
+            `  ${col('/cuota default lora-baker nova')} sets several folders back to the default`,
+            `  ${col('/cuota default over-80')} only the ones above 80%`,
+            `  ${col('/cuota default all')} every folder`,
           ]
       ).join('\n')
     )
@@ -303,15 +421,58 @@ export const textos = {
 
   lista: (idioma: Idioma, todas: readonly Politica[]) => {
     const es = idioma === 'es'
-    const de = (n?: number) => (n === undefined ? (es ? 'el de todas' : 'default') : n >= 100 ? (es ? 'sin límite' : 'no cap') : `${n}%`)
-    return [...todas]
-      .sort((a, b) => a.ruta.localeCompare(b.ruta))
-      .map(p => {
-        const t = propiosDe(p) ?? {}
-        return `${p.ruta}  (${p.desde})\n  5 h: ${de(t.cinco)} · ${es ? 'semana' : 'week'}: ${de(t.semana)}`
-      })
-      .join('\n')
+    const cortos = nombresCortos(todas.map(p => p.ruta))
+    const de = (p: Politica, v: VentanaId) => {
+      const n = propiosDe(p)?.[v]
+      const valor = n === undefined ? (es ? 'el de todas' : 'default') : n >= 100 ? (es ? 'sin límite' : 'no cap') : `${n}%`
+      const t = p.temporal?.[v]
+      return t ? `${valor} ${es ? 'hasta' : 'until'} ${fechaDe(t.hasta)}` : valor
+    }
+    return [
+      es ? 'Carpetas con límite propio (el nombre de la izquierda es el que se escribe en los comandos):' : 'Folders with their own caps (the name on the left is the one to type in commands):',
+      ...[...todas]
+        .sort((a, b) => a.ruta.localeCompare(b.ruta))
+        .map(p => `  ${cortos.get(p.ruta)}: 5 h ${de(p, 'cinco')} · ${es ? 'semana' : 'week'} ${de(p, 'semana')} (${p.ruta})`),
+    ].join('\n')
   },
+
+  enLote: (idioma: Idioma, ventana: VentanaId, tope: number | undefined, defecto: number, nombres: readonly string[], hasta?: string) => {
+    const es = idioma === 'es'
+    const cual = cualVentana(ventana, idioma)
+    const lista = nombres.join(', ')
+    const temporal = hasta ? (es ? ` hasta el reinicio (${fechaDe(hasta)})` : ` until the reset (${fechaDe(hasta)})`) : ''
+    if (tope === undefined) {
+      return es
+        ? `Listo: regresaron al límite ${cual} de todas las carpetas (${defecto}%): ${lista}.`
+        : `Done: back to the default ${cual} cap (${defecto}%): ${lista}.`
+    }
+    const valor = tope >= 100 ? (es ? 'sin límite' : 'no cap') : es ? `límite ${tope}%` : `cap ${tope}%`
+    return es ? `Listo: ${valor} ${cual}${temporal} en ${lista}.` : `Done: ${cual} ${valor}${temporal} for ${lista}.`
+  },
+
+  ninguna: (idioma: Idioma, ventana: VentanaId, sobre?: number) => {
+    const es = idioma === 'es'
+    const cual = cualVentana(ventana, idioma)
+    if (sobre !== undefined) {
+      return es ? `Ninguna carpeta tiene límite ${cual} arriba de ${sobre}%. No cambié nada.` : `No folder has a ${cual} cap above ${sobre}%. Nothing changed.`
+    }
+    return es ? `Ninguna carpeta tiene límite ${cual} propio. No cambié nada.` : `No folder has its own ${cual} cap. Nothing changed.`
+  },
+
+  noEncontre: (idioma: Idioma, nombre: string) =>
+    idioma === 'es'
+      ? `No encontré "${nombre}" entre las carpetas con límite propio ni en la actual. /cuota lista muestra los nombres. No cambié nada.`
+      : `Could not find "${nombre}" among the folders with their own caps or the current one. /cuota list shows the names. Nothing changed.`,
+
+  ambiguo: (idioma: Idioma, nombre: string, opciones: readonly string[]) =>
+    idioma === 'es'
+      ? `"${nombre}" coincide con varias carpetas: ${opciones.join(', ')}. Escribe uno de esos nombres. No cambié nada.`
+      : `"${nombre}" matches several folders: ${opciones.join(', ')}. Type one of those names. Nothing changed.`,
+
+  sinReinicio: (idioma: Idioma, ventana: VentanaId) =>
+    idioma === 'es'
+      ? `Todavía no hay lectura de la ventana ${cualVentana(ventana, idioma)}, así que no sé cuándo se reinicia. Prueba después de la primera respuesta. No cambié nada.`
+      : `No reading of the ${cualVentana(ventana, idioma)} window yet, so its reset time is unknown. Try after the first response. Nothing changed.`,
 
   descripcionCinco: (idioma: Idioma) =>
     idioma === 'es'
@@ -324,13 +485,19 @@ export const textos = {
       : "This folder's weekly usage cap: show, raise (90, 100, n) or reset (default)",
 }
 
-const hora = (iso: string | undefined, idioma: Idioma) => {
-  if (!iso) return ''
+const cualVentana = (v: VentanaId, idioma: Idioma) =>
+  v === 'cinco' ? (idioma === 'es' ? 'de 5 h' : '5-hour') : idioma === 'es' ? 'semanal' : 'weekly'
+
+const fechaDe = (iso: string) => {
   const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
+  if (Number.isNaN(d.getTime())) return iso
   const p = (n: number) => String(n).padStart(2, '0')
-  const fecha = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
-  return idioma === 'es' ? ` · se reinicia ${fecha}` : ` · resets ${fecha}`
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+const hora = (iso: string | undefined, idioma: Idioma) => {
+  if (!iso || Number.isNaN(new Date(iso).getTime())) return ''
+  return idioma === 'es' ? ` · se reinicia ${fechaDe(iso)}` : ` · resets ${fechaDe(iso)}`
 }
 
 export const informe = (
@@ -341,6 +508,7 @@ export const informe = (
   idioma: Idioma,
   propios?: TopesCarpeta,
   cambio?: VentanaId,
+  temporal?: { hasta: string; despues: number },
 ) => {
   const es = idioma === 'es'
 
@@ -375,8 +543,21 @@ export const informe = (
   if (cambio) {
     const tope = topeDe(cambio, ajustes, propios)
     const cual = cambio === 'cinco' ? (es ? 'de 5 h' : '5-hour') : es ? 'semanal' : 'weekly'
+    const despues = temporal
+      ? es
+        ? ` hasta que se reinicie la ventana (${fechaDe(temporal.hasta)}); después regresa a ${temporal.despues >= 100 ? 'sin límite' : `${temporal.despues}%`}.`
+        : ` until the window resets (${fechaDe(temporal.hasta)}); then it goes back to ${temporal.despues >= 100 ? 'no cap' : `${temporal.despues}%`}.`
+      : '.'
     const listo =
-      propios?.[cambio] === undefined
+      temporal !== undefined
+        ? (tope >= 100
+            ? es
+              ? `Listo: esta carpeta no tiene límite ${cual}`
+              : `Done: this folder has no ${cual} cap`
+            : es
+              ? `Listo: el límite ${cual} de esta carpeta es ${tope}%`
+              : `Done: this folder's ${cual} cap is ${tope}%`) + despues
+        : propios?.[cambio] === undefined
         ? es
           ? `Listo: el límite ${cual} de esta carpeta regresó al de todas las carpetas (${tope}%).`
           : `Done: this folder's ${cual} cap is back to the default (${tope}%).`

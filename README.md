@@ -59,7 +59,12 @@ braked · 5 h 80% · week 34% · cap 80% · /cuota 90 to go on
 | `/cuota 100` | Removes this folder's 5-hour cap (also `/cuota free`) |
 | `/cuota default` | Back to the default 5-hour cap |
 | `/cuotaweek default` | Back to the default weekly cap |
-| `/cuota list` | Every folder with its own caps |
+| `/cuota 100 temp` | No 5-hour cap until the window resets; then it goes back by itself |
+| `/cuota list` | Every folder with its own caps and its short name |
+| `/cuota 85 lora-baker nova` | Changes several folders by short name (parent/name when two folders share a name) |
+| `/cuota default lora-baker nova` | Sets several folders back to the default 5-hour cap |
+| `/cuota default over-80` | Only the folders whose 5-hour cap is above 80% |
+| `/cuota default all` | Every folder |
 | `/cuota help` | All options |
 
 Commands are answered by the plugin itself: they never reach the model, use no tokens, and always work, even when the folder is braked.

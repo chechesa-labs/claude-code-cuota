@@ -59,7 +59,12 @@ frenado · 5 h 80% · semana 34% · límite 80% · /cuota 90 para seguir
 | `/cuota 100` | Deja esta carpeta sin límite de 5 h (también `/cuota libre`) |
 | `/cuota default` | Regresa el límite de 5 h al de todas las carpetas |
 | `/cuotasemanal default` | Regresa el límite semanal al de todas las carpetas |
-| `/cuota lista` | Las carpetas con límite propio |
+| `/cuota 100 temporal` | Sin límite de 5 h hasta que se reinicie la ventana; después regresa solo |
+| `/cuota lista` | Las carpetas con límite propio y su nombre corto |
+| `/cuota 85 lora-baker nova` | Cambia varias carpetas por su nombre corto (padre/nombre si dos carpetas se llaman igual) |
+| `/cuota default lora-baker nova` | Regresa varias carpetas al límite de 5 h de todas |
+| `/cuota default sobre-80` | Solo las carpetas con límite de 5 h arriba de 80% |
+| `/cuota default todas` | Todas las carpetas |
 | `/cuota ayuda` | Todas las opciones |
 
 Los comandos los responde el propio plugin: nunca llegan al modelo, no gastan tokens y siempre funcionan, aunque la carpeta esté frenada.

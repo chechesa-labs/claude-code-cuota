@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0 (2026-10-25)
+
+- Several folders at once: `/cuota 85 lora-baker nova`, `/cuota default over-80`, `/cuota default all`. Folders are named by their short name, shown by `/cuota list` (parent/name when two folders share a name); if a name is unknown or ambiguous, nothing changes.
+- `temp` (`temporal` in Spanish): a raised cap lasts until the window resets, then goes back to the previous value.
+
 ## 0.1.1 (2026-10-25)
 
 - Changing a cap now confirms it in the first line and shows the short status, without repeating the help.

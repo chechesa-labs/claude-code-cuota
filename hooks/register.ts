@@ -230,8 +230,9 @@ export const register: Register = (on, options) => {
   })
 
   on('prompt.submit', async ($, e, next) => {
-    // Los comandos (incluido /cuota para desbloquear) y los avisos de tareas en curso siempre pasan.
-    if (e.command !== undefined || e.origin.kind === 'task-notification') return next(e)
+    // Siempre pasan: los comandos (incluido /cuota para desbloquear), los avisos de tareas en curso
+    // y los mensajes que llegan a un turno en marcha (`turnId`), que pueden ser instrucciones de cierre.
+    if (e.command !== undefined || e.turnId !== undefined || e.origin.kind === 'task-notification') return next(e)
     const { ev, tope } = await refrescar($)
     if (ev.estado !== 'frenado' || !ev.manda) return next(e)
     await avisar($, 'freno', { motivo: 'prompt' })

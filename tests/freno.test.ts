@@ -90,6 +90,13 @@ test('una sesión nueva sin lectura usa la última guardada mientras siga vigent
   expect((await $.prompt.submit(prompt('x'))).drop).toBeDefined()
 })
 
+test('un mensaje que llega a un turno en marcha pasa aunque la carpeta esté frenada', async ($, on) => {
+  motor(on, [{ kind: 'seven_day', percentUsed: 95 }])
+  await $.session.start(arrancar)
+  expect(await $.prompt.submit({ ...prompt('ya para y deja el estado'), turnId: 't-1' })).toEqual({ text: 'ya para y deja el estado' })
+  expect((await $.prompt.submit(prompt('otra cosa'))).drop).toBeDefined()
+})
+
 test('/cuota pasa aunque la carpeta esté frenada', async ($, on) => {
   motor(on, [{ kind: 'seven_day', percentUsed: 95 }])
   await $.session.start(arrancar)

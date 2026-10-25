@@ -146,6 +146,12 @@ async function registrarComandos($: EngineInterface) {
     // Si el nombre choca con otro comando, lo demás del mod sigue funcionando.
   }
   try {
+    // `/quota`: el mismo comando para quien lo teclea en inglés.
+    await $.command.register({ name: 'quota', description: textos.descripcionCinco(idioma), argumentHint: pista, immediate: true })
+  } catch {
+    // Igual que arriba.
+  }
+  try {
     if (idioma === 'es') {
       await $.command.register({ name: 'cuotasemanal', description: textos.descripcionSemana(idioma), argumentHint: pista, immediate: true })
     } else {
@@ -183,7 +189,8 @@ async function correrComando($: EngineInterface, args: string, ventana: VentanaI
   }
 
   const { ev, propios } = await refrescar($)
-  return informe(raiz, lectura, ev, ajustes, idioma, propios)
+  const cambio = orden.tipo === 'fijar' || orden.tipo === 'quitar' ? ventana : undefined
+  return informe(raiz, lectura, ev, ajustes, idioma, propios, cambio)
 }
 
 export const register: Register = (on, options) => {
@@ -224,6 +231,7 @@ export const register: Register = (on, options) => {
   // ------------------------------------------------------------ comandos
 
   on('command.run', { command: 'cuota' }, async ($, e) => ({ text: await correrComando($, e.args, 'cinco') }))
+  on('command.run', { command: 'quota' }, async ($, e) => ({ text: await correrComando($, e.args, 'cinco') }))
   on('command.run', { command: 'cuotasemanal' }, async ($, e) => ({ text: await correrComando($, e.args, 'semana') }))
   on('command.run', { command: 'cuotaweek' }, async ($, e) => ({ text: await correrComando($, e.args, 'semana') }))
 

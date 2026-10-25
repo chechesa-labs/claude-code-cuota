@@ -340,6 +340,7 @@ export const informe = (
   ajustes: Ajustes,
   idioma: Idioma,
   propios?: TopesCarpeta,
+  cambio?: VentanaId,
 ) => {
   const es = idioma === 'es'
 
@@ -370,6 +371,24 @@ export const informe = (
       ? 'Límite alcanzado: los mensajes nuevos de esta carpeta esperan.'
       : 'Cap reached: new messages in this folder wait.',
   }[ev.estado]
+
+  if (cambio) {
+    const tope = topeDe(cambio, ajustes, propios)
+    const cual = cambio === 'cinco' ? (es ? 'de 5 h' : '5-hour') : es ? 'semanal' : 'weekly'
+    const listo =
+      propios?.[cambio] === undefined
+        ? es
+          ? `Listo: el límite ${cual} de esta carpeta regresó al de todas las carpetas (${tope}%).`
+          : `Done: this folder's ${cual} cap is back to the default (${tope}%).`
+        : tope >= 100
+          ? es
+            ? `Listo: esta carpeta ya no tiene límite ${cual}.`
+            : `Done: this folder no longer has a ${cual} cap.`
+          : es
+            ? `Listo: el límite ${cual} de esta carpeta ahora es ${tope}%.`
+            : `Done: this folder's ${cual} cap is now ${tope}%.`
+    return [listo, '', `${es ? 'Carpeta' : 'Folder'}: ${carpeta}`, ventana('cinco'), ventana('semana'), estado].join('\n')
+  }
 
   const col = (c: string) => `${c}:`
   const cambios: string[] = []

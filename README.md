@@ -49,7 +49,7 @@ braked · 5 h 80% · week 34% · cap 80% · /cuota 90 to go on
 
 ## Commands
 
-`/cuota` is for the 5-hour window and `/cuotaweek` for the weekly one. With Claude Code set to Spanish, the weekly command is `/cuotasemanal`.
+`/cuota` is for the 5-hour window and `/cuotaweek` for the weekly one. With Claude Code set to Spanish, the weekly command is `/cuotasemanal`. `/quota` works too, as an alias of `/cuota`.
 
 | Command | What it does |
 | --- | --- |

@@ -95,6 +95,19 @@ test('una política de la v0.1 sigue valiendo para las dos ventanas', async ($, 
   expect(salida.text).toContain('Semana: 85% usado · límite 90% (propio de esta carpeta)')
 })
 
+test('cambiar el límite confirma el cambio y /quota es el mismo comando', async ($, on) => {
+  motor(on, [{ kind: 'five_hour', percentUsed: 83 }], {})
+  await $.session.start(arrancar)
+  const subir = (await $.command.run(cuota('90'))).text
+  expect(subir.split('\n')[0]).toBe('Listo: el límite de 5 h de esta carpeta ahora es 90%.')
+  expect(subir).toContain('5 h: 83% usado · límite 90% (propio de esta carpeta)')
+  expect(subir).not.toContain('Para cambiarlo')
+  const libre = (await $.command.run({ ...cuota('100'), command: 'quota' })).text
+  expect(libre.split('\n')[0]).toBe('Listo: esta carpeta ya no tiene límite de 5 h.')
+  const vuelta = (await $.command.run(cuota('default'))).text
+  expect(vuelta.split('\n')[0]).toBe('Listo: el límite de 5 h de esta carpeta regresó al de todas las carpetas (80%).')
+})
+
 test('una sesión nueva sin lectura usa la última guardada mientras siga vigente', async ($, on) => {
   // Lo que dejó otra sesión: la semana sigue vigente, la de 5 h ya reinició (el reloj marca 20:00).
   const pantalla = motor(on, [], {

@@ -49,7 +49,7 @@ frenado · 5 h 80% · semana 34% · límite 80% · /cuota 90 para seguir
 
 ## Comandos
 
-`/cuota` es para la ventana de 5 horas y `/cuotasemanal` para la semanal. Con Claude Code en inglés, el comando semanal es `/cuotaweek`.
+`/cuota` es para la ventana de 5 horas y `/cuotasemanal` para la semanal. Con Claude Code en inglés, el comando semanal es `/cuotaweek`. `/quota` también funciona, como alias de `/cuota`.
 
 | Comando | Qué hace |
 | --- | --- |

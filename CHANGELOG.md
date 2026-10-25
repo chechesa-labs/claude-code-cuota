@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1 (2026-10-25)
+
+- Changing a cap now confirms it in the first line and shows the short status, without repeating the help.
+- `/quota` works as an alias of `/cuota`.
+
 ## 0.1.0 (2026-10-25)
 
 First public release.

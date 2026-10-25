@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { claveDe, evaluar, leer, lineaDeEstado, ordenDe, padreDe } from '../hooks/politica'
+import { claveDe, evaluar, idiomaDe, leer, lineaDeEstado, ordenDe, padreDe } from '../hooks/politica'
 
 const AJUSTES = { topeCinco: 80, topeSemana: 80, cincoFrena: true, margen: 10 }
 
@@ -38,10 +38,10 @@ test('la de 5 h configurada para solo avisar no frena', () => {
 
 test('la línea de estado empieza con la cifra y sugiere el desbloqueo', () => {
   const l = { cinco: { uso: 42 }, semana: { uso: 61 } }
-  expect(lineaDeEstado(l, evaluar(l, AJUSTES), AJUSTES, 'es')).toBe('5 h 42% · semana 61% · tope 80% · quedan 19%')
+  expect(lineaDeEstado(l, evaluar(l, AJUSTES), AJUSTES, 'es')).toBe('5 h 42% · semana 61% · límite 80% · quedan 19%')
   const f = { cinco: { uso: 20 }, semana: { uso: 81 } }
   expect(lineaDeEstado(f, evaluar(f, AJUSTES), AJUSTES, 'es')).toBe(
-    'frenado · 5 h 20% · semana 81% · tope 80% · /cuota 90 para seguir',
+    'frenado · 5 h 20% · semana 81% · límite 80% · /cuota 90 para seguir',
   )
 })
 
@@ -61,4 +61,14 @@ test('rutas de Windows y POSIX', () => {
   expect(padreDe('D:\\IA')).toBe('D:\\')
   expect(padreDe('/home/a')).toBe('/home')
   expect(padreDe('/home')).toBe('/')
+})
+
+test('idioma de la interfaz según el ajuste language', () => {
+  expect(idiomaDe('es')).toBe('es')
+  expect(idiomaDe('Spanish')).toBe('es')
+  expect(idiomaDe('español')).toBe('es')
+  expect(idiomaDe('es-MX')).toBe('es')
+  expect(idiomaDe('english')).toBe('en')
+  expect(idiomaDe('japanese')).toBe('en')
+  expect(idiomaDe(undefined)).toBe('en')
 })

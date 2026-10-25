@@ -15,6 +15,7 @@ import {
   textos,
   topeDe,
   vigente,
+  idiomaDe,
 } from './politica'
 
 type Politica = { tope: number; ruta: string; desde: string }
@@ -27,6 +28,7 @@ const CLAVE_LECTURA = 'ultimaLectura'
 // las políticas viven en $.store y sobreviven.
 let ajustes: Ajustes = { topeCinco: 80, topeSemana: 80, cincoFrena: true, margen: 10 }
 let idioma: Idioma = 'es'
+let idiomaElegido = 'auto'
 let webhook = ''
 let carpeta: string | undefined
 let lectura: Lectura = {}
@@ -126,14 +128,18 @@ async function lecturaGuardada($: EngineInterface) {
   lectura = vigente(v as Lectura, await $.clock.now())
 }
 
+/** `auto` sigue el ajuste `language` de Claude Code; `es` o `en` lo fijan. */
+async function resolverIdioma($: EngineInterface) {
+  if (idiomaElegido === 'es' || idiomaElegido === 'en') return
+  const ajustesClaude = await $.settings.read().catch(() => undefined)
+  idioma = idiomaDe(ajustesClaude?.language)
+}
+
 async function registrarComando($: EngineInterface) {
   try {
     await $.command.register({
       name: 'cuota',
-      description:
-        idioma === 'es'
-          ? 'Tope de uso del plan para esta carpeta: ver, subir (90, 100, n) o quitar'
-          : "This folder's cap on plan usage: show, raise (90, 100, n) or remove",
+      description: textos.descripcionComando(idioma),
       argumentHint: idioma === 'es' ? '[90 | 100 | n | quitar | lista]' : '[90 | 100 | n | remove | list]',
       immediate: true,
     })
@@ -151,10 +157,10 @@ async function correrComando($: EngineInterface, args: string) {
 
   if (orden.tipo === 'lista') {
     const todas = Object.values(await politicas($))
-    if (todas.length === 0) return es ? 'Ninguna carpeta tiene política propia.' : 'No folder has its own policy.'
+    if (todas.length === 0) return textos.sinPropias(idioma)
     return todas
       .sort((a, b) => a.ruta.localeCompare(b.ruta))
-      .map(p => `${p.tope >= 100 ? (es ? 'libre' : 'free') : `${p.tope}%`}  ${p.ruta}  (${p.desde})`)
+      .map(p => `${p.tope >= 100 ? (es ? 'sin límite' : 'no cap') : `${p.tope}%`}  ${p.ruta}  (${p.desde})`)
       .join('\n')
   }
 
@@ -179,12 +185,14 @@ export const register: Register = (on, options) => {
     cincoFrena: options.cincoHorasFrena !== false,
     margen: Number(options.margenAviso ?? 10),
   }
-  idioma = options.idioma === 'en' ? 'en' : 'es'
+  idiomaElegido = typeof options.idioma === 'string' ? options.idioma : 'auto'
+  idioma = idiomaElegido === 'en' ? 'en' : 'es'
   webhook = typeof options.webhook === 'string' ? options.webhook.trim() : ''
 
   // ------------------------------------------------------------ arranque y lectura
 
   on('session.start', async ($, e, next) => {
+    await resolverIdioma($)
     await registrarComando($)
     const r = await next(e)
     carpeta = await raizDe($, e.cwd)

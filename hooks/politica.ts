@@ -130,28 +130,29 @@ export const ordenDe = (args: string): Orden => {
 }
 
 // ---------------------------------------------------------------- textos
+// Lo que ve el usuario dice "límite" (en inglés "cap"); en el código sigue siendo `tope`.
 
 const T = {
   es: {
     semana: 'semana',
-    tope: 'tope',
-    faltan: 'quedan',
-    libre: 'libre',
+    limite: 'límite',
+    quedan: (n: number) => `quedan ${n}%`,
+    sinLimite: 'sin límite',
     sinDatos: 'sin lectura todavía',
     cerrando: 've cerrando',
     frenado: 'frenado',
-    sobreTope: 'sobre el tope',
+    sobreLimite: 'sobre el límite',
     paraSeguir: (n: number) => `/cuota ${n} para seguir`,
   },
   en: {
     semana: 'week',
-    tope: 'cap',
-    faltan: 'left',
-    libre: 'free',
+    limite: 'cap',
+    quedan: (n: number) => `${n}% left`,
+    sinLimite: 'no cap',
     sinDatos: 'no reading yet',
     cerrando: 'wind down',
     frenado: 'braked',
-    sobreTope: 'over cap',
+    sobreLimite: 'over cap',
     paraSeguir: (n: number) => `/cuota ${n} to go on`,
   },
 } as const
@@ -171,15 +172,15 @@ export const lineaDeEstado = (
   if (ev.estado === 'frenado') partes.push(t.frenado)
   else if (ev.estado === 'cerrando') partes.push(t.cerrando)
 
-  if (lectura.cinco) partes.push(`5 h ${pct(lectura.cinco.uso)}${ev.avisoCinco ? ` (${t.sobreTope})` : ''}`)
+  if (lectura.cinco) partes.push(`5 h ${pct(lectura.cinco.uso)}${ev.avisoCinco ? ` (${t.sobreLimite})` : ''}`)
   if (lectura.semana) partes.push(`${t.semana} ${pct(lectura.semana.uso)}`)
 
-  if (ev.estado === 'libre') partes.push(t.libre)
+  if (ev.estado === 'libre') partes.push(t.sinLimite)
   else {
     const tc = topeDe('cinco', ajustes, topeCarpeta)
     const ts = topeDe('semana', ajustes, topeCarpeta)
-    partes.push(tc === ts ? `${t.tope} ${tc}%` : `${t.tope} ${tc}/${ts}%`)
-    if (ev.faltan !== undefined && ev.estado !== 'frenado') partes.push(idioma === 'es' ? `${t.faltan} ${ev.faltan}%` : `${ev.faltan}% ${t.faltan}`)
+    partes.push(tc === ts ? `${t.limite} ${tc}%` : `${t.limite} ${tc}/${ts}%`)
+    if (ev.faltan !== undefined && ev.estado !== 'frenado') partes.push(t.quedan(ev.faltan))
     if (ev.estado === 'frenado') {
       partes.push(t.paraSeguir(siguienteNivel(topeDe(ev.manda ?? 'semana', ajustes, topeCarpeta))))
     }
@@ -194,7 +195,7 @@ export const textos = {
   seccionCierre: (idioma: Idioma, frenado: boolean) =>
     idioma === 'es'
       ? [
-          'Cuota del plan: esta carpeta está cerca de su tope de uso' + (frenado ? ' y ya lo alcanzó' : '') + '.',
+          'Cuota del plan: esta carpeta está cerca de su límite de uso' + (frenado ? ' y ya lo alcanzó' : '') + '.',
           'Cierra lo que tienes en curso sin abrir frentes nuevos: termina el paso actual, deja escrito el estado',
           '(qué quedó hecho, qué falta, siguiente paso) donde el proyecto lo guarde, y no lances agentes nuevos.',
           'Dilo en una línea al usuario al terminar.',
@@ -208,18 +209,18 @@ export const textos = {
 
   mensajeAgente: (idioma: Idioma) =>
     idioma === 'es'
-      ? 'Cuota del plan: se alcanzó el tope de esta carpeta. Termina el paso en que vas, entrega lo que tengas con lo que falta, y no abras trabajo nuevo.'
+      ? 'Cuota del plan: esta carpeta llegó a su límite. Termina el paso en que vas, entrega lo que tengas con lo que falta, y no abras trabajo nuevo.'
       : 'Plan usage: this folder reached its cap. Finish your current step, hand back what you have with what is left, and start nothing new.',
 
   toastCerrando: (idioma: Idioma, ventana: 'cinco' | 'semana', faltan: number) =>
     idioma === 'es'
-      ? `Quedan ${faltan}% antes del tope en ${nombreVentana(ventana, idioma)}: le pedí a Claude que vaya cerrando.`
+      ? `Quedan ${faltan}% antes del límite en ${nombreVentana(ventana, idioma)}: le pedí a Claude que vaya cerrando.`
       : `${faltan}% left before the cap on ${nombreVentana(ventana, idioma)}: Claude was asked to wind down.`,
 
   toastFrenado: (idioma: Idioma, ventana: 'cinco' | 'semana', nivel: number) =>
     idioma === 'es'
-      ? `Tope alcanzado en ${nombreVentana(ventana, idioma)}. Lo que está en curso termina; los prompts nuevos de esta carpeta esperan. /cuota ${nivel} para seguir.`
-      : `Cap reached on ${nombreVentana(ventana, idioma)}. Work in progress finishes; new prompts in this folder wait. /cuota ${nivel} to go on.`,
+      ? `Límite alcanzado en ${nombreVentana(ventana, idioma)}. Lo que esté haciendo Claude se completa sin cortarse; los mensajes nuevos de esta carpeta esperan. /cuota ${nivel} para seguir.`
+      : `Cap reached on ${nombreVentana(ventana, idioma)}. Whatever Claude is doing finishes without being cut off; new messages in this folder wait. /cuota ${nivel} to go on.`,
 
   toastAvisoCinco: (idioma: Idioma, tope: number) =>
     idioma === 'es'
@@ -228,34 +229,45 @@ export const textos = {
 
   rechazoPrompt: (idioma: Idioma, ventana: 'cinco' | 'semana', nivel: number) =>
     idioma === 'es'
-      ? `cuota: esta carpeta llegó a su tope en ${nombreVentana(ventana, idioma)}. Escribe /cuota ${nivel} para subirlo, /cuota 100 para dejarla libre, o espera el reinicio.`
-      : `cuota: this folder reached its cap on ${nombreVentana(ventana, idioma)}. Type /cuota ${nivel} to raise it, /cuota 100 to free it, or wait for the reset.`,
+      ? `cuota: esta carpeta llegó a su límite en ${nombreVentana(ventana, idioma)}. Escribe /cuota ${nivel} para subirlo, /cuota 100 para dejarla sin límite, o espera el reinicio.`
+      : `cuota: this folder reached its cap on ${nombreVentana(ventana, idioma)}. Type /cuota ${nivel} to raise it, /cuota 100 to remove the cap, or wait for the reset.`,
 
   rechazoAgente: (idioma: Idioma) =>
     idioma === 'es'
-      ? 'cuota: esta carpeta llegó a su tope de uso; no se lanzan agentes nuevos. Termina con lo que tienes y díselo al usuario.'
+      ? 'cuota: esta carpeta llegó a su límite de uso; no se lanzan agentes nuevos. Termina con lo que tienes y díselo al usuario.'
       : 'cuota: this folder reached its usage cap; no new agents start. Finish with what you have and tell the user.',
 
+  // La superficie antepone "cuota: " a la salida de un comando: el texto empieza ya con la explicación.
   ayuda: (idioma: Idioma, error?: string) =>
-    (error ? (idioma === 'es' ? `No entendí "${error}".\n` : `Did not understand "${error}".\n`) : '') +
+    (error ? (idioma === 'es' ? `No entendí "${error}".\n\n` : `Did not understand "${error}".\n\n`) : '') +
     (idioma === 'es'
       ? [
-          '/cuota           ver la política y el consumo de esta carpeta',
-          '/cuota 90        subir el tope de esta carpeta a 90%',
-          '/cuota 100       dejarla libre (también: /cuota libre)',
-          '/cuota 85        cualquier número de 1 a 100',
-          '/cuota quitar    volver al tope por defecto',
-          '/cuota lista     ver todas las carpetas con política propia',
+          'Límite de uso del plan por carpeta. Comandos:',
+          '  /cuota          muestra el límite y el uso de esta carpeta',
+          '  /cuota 90       sube el límite de esta carpeta a 90%',
+          '  /cuota 85       cualquier número del 1 al 100',
+          '  /cuota 100      deja esta carpeta sin límite (también: /cuota libre)',
+          '  /cuota quitar   la regresa al límite de todas las carpetas',
+          '  /cuota lista    las carpetas con límite propio',
         ]
       : [
-          '/cuota           show this folder\'s policy and usage',
-          '/cuota 90        raise this folder\'s cap to 90%',
-          '/cuota 100       free it (also: /cuota free)',
-          '/cuota 85        any number from 1 to 100',
-          '/cuota remove    back to the default cap',
-          '/cuota list      every folder with its own policy',
+          'Plan usage cap per folder. Commands:',
+          "  /cuota          shows this folder's cap and usage",
+          "  /cuota 90       raises this folder's cap to 90%",
+          '  /cuota 85       any number from 1 to 100',
+          "  /cuota 100      removes this folder's cap (also: /cuota free)",
+          '  /cuota remove   back to the default cap',
+          '  /cuota list     folders with their own cap',
         ]
     ).join('\n'),
+
+  sinPropias: (idioma: Idioma) =>
+    idioma === 'es' ? 'Ninguna carpeta tiene límite propio.' : 'No folder has its own cap.',
+
+  descripcionComando: (idioma: Idioma) =>
+    idioma === 'es'
+      ? 'Límite de uso del plan para esta carpeta: ver, subir (90, 100, n) o quitar'
+      : "This folder's cap on plan usage: show, raise (90, 100, n) or remove",
 }
 
 const hora = (iso: string | undefined, idioma: Idioma) => {
@@ -264,7 +276,7 @@ const hora = (iso: string | undefined, idioma: Idioma) => {
   if (Number.isNaN(d.getTime())) return ''
   const p = (n: number) => String(n).padStart(2, '0')
   const fecha = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
-  return idioma === 'es' ? `, reinicia ${fecha}` : `, resets ${fecha}`
+  return idioma === 'es' ? `, se reinicia ${fecha}` : `, resets ${fecha}`
 }
 
 export const informe = (
@@ -276,28 +288,70 @@ export const informe = (
   topeCarpeta?: number,
 ) => {
   const es = idioma === 'es'
-  const politica =
+  const tc = topeDe('cinco', ajustes, topeCarpeta)
+  const ts = topeDe('semana', ajustes, topeCarpeta)
+  const cifra = tc === ts ? `${tc}%` : es ? `5 h ${tc}%, semana ${ts}%` : `5-hour ${tc}%, weekly ${ts}%`
+  const soloAvisa = ajustes.cincoFrena ? '' : es ? '; la de 5 h solo avisa' : '; the 5-hour one only warns'
+  const limite =
     topeCarpeta === undefined
       ? es
-        ? `por defecto (5 h ${ajustes.topeCinco}%${ajustes.cincoFrena ? '' : ', solo avisa'}; semana ${ajustes.topeSemana}%)`
-        : `default (5 h ${ajustes.topeCinco}%${ajustes.cincoFrena ? '' : ', warning only'}; week ${ajustes.topeSemana}%)`
+        ? `${cifra} (el de todas las carpetas${soloAvisa})`
+        : `${cifra} (the default for every folder${soloAvisa})`
       : topeCarpeta >= 100
         ? es
-          ? 'libre (100%)'
-          : 'free (100%)'
+          ? 'sin límite (propio de esta carpeta)'
+          : "none (this folder's own)"
         : es
-          ? `propia, ${topeCarpeta}% en ambas ventanas`
-          : `own, ${topeCarpeta}% on both windows`
-  const lineas = [
+          ? `${cifra} (propio de esta carpeta${soloAvisa})`
+          : `${cifra} (this folder's own${soloAvisa})`
+
+  const uso = (v: Ventana | undefined, nombre: string) =>
+    `${nombre}: ${v ? `${pct(v.uso)}${hora(v.reinicio, idioma)}` : es ? 'sin lectura' : 'no reading'}`
+
+  const quedan = ev.faltan ?? 0
+  const estado = {
+    'sin-datos': es
+      ? 'Todavía no hay lectura de uso; aparece después de la primera respuesta.'
+      : 'No usage reading yet; it shows after the first response.',
+    libre: es ? 'Esta carpeta no tiene límite.' : 'This folder has no cap.',
+    normal: es ? `Quedan ${quedan}% antes del límite.` : `${quedan}% left before the cap.`,
+    cerrando: es
+      ? `Quedan ${quedan}% antes del límite: Claude está cerrando lo que trae.`
+      : `${quedan}% left before the cap: Claude is wrapping up.`,
+    frenado: es
+      ? 'Límite alcanzado: los mensajes nuevos de esta carpeta esperan.'
+      : 'Cap reached: new messages in this folder wait.',
+  }[ev.estado]
+
+  const nivel = siguienteNivel(Math.min(tc, ts))
+  const col = (c: string) => c.padEnd(15)
+  const sube = es
+    ? nivel >= 100
+      ? 'deja esta carpeta sin límite'
+      : `sube el límite de esta carpeta a ${nivel}%`
+    : nivel >= 100
+      ? "removes this folder's cap"
+      : `raises this folder's cap to ${nivel}%`
+
+  return [
+    es
+      ? 'Límite de uso del plan por carpeta. Al llegar al límite, esta carpeta deja de aceptar mensajes nuevos; lo que esté haciendo Claude se completa sin cortarse.'
+      : 'Plan usage cap per folder. At the cap, this folder stops taking new messages; whatever Claude is doing finishes without being cut off.',
+    '',
     `${es ? 'Carpeta' : 'Folder'}: ${carpeta}`,
-    `${es ? 'Política' : 'Policy'}: ${politica}`,
-    lectura.cinco
-      ? `5 h: ${pct(lectura.cinco.uso)}${hora(lectura.cinco.reinicio, idioma)}`
-      : `5 h: ${es ? 'sin lectura' : 'no reading'}`,
-    lectura.semana
-      ? `${es ? 'Semana' : 'Week'}: ${pct(lectura.semana.uso)}${hora(lectura.semana.reinicio, idioma)}`
-      : `${es ? 'Semana' : 'Week'}: ${es ? 'sin lectura' : 'no reading'}`,
-    `${es ? 'Estado' : 'State'}: ${lineaDeEstado(lectura, ev, ajustes, idioma, topeCarpeta)}`,
-  ]
-  return lineas.join('\n')
+    `${es ? 'Límite' : 'Cap'}: ${limite}`,
+    uso(lectura.cinco, es ? 'Uso de 5 h' : '5-hour usage'),
+    uso(lectura.semana, es ? 'Uso semanal' : 'Weekly usage'),
+    estado,
+    '',
+    es ? 'Para cambiarlo:' : 'To change it:',
+    `  ${col(`/cuota ${nivel}`)} ${sube}`,
+    ...(nivel >= 100 ? [] : [`  ${col('/cuota 100')} ${es ? 'deja esta carpeta sin límite' : "removes this folder's cap"}`]),
+    `  ${col(es ? '/cuota quitar' : '/cuota remove')} ${es ? 'la regresa al límite de todas las carpetas' : 'back to the default cap'}`,
+    `  ${col(es ? '/cuota ayuda' : '/cuota help')} ${es ? 'todas las opciones' : 'every option'}`,
+  ].join('\n')
 }
+
+/** El idioma de la interfaz a partir del ajuste `language` de Claude Code: español si lo pide, si no inglés. */
+export const idiomaDe = (language: unknown): Idioma =>
+  typeof language === 'string' && /^(es\b|es[-_]|spa|espa|castellano)/i.test(language.trim()) ? 'es' : 'en'

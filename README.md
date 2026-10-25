@@ -85,9 +85,26 @@ Set them when installing, or later in `/config`:
 | Language | auto | `auto` follows Claude Code's `language` setting (Spanish or English); `es` or `en` pin it |
 | Webhook | empty | Optional URL that receives a JSON `POST` on each reading, each brake and each change of cap |
 
-## Privacy
+## What it reads, sends and changes
 
-Cuota makes no model calls and sends nothing anywhere, except to the webhook if you set one. It reads the usage percentages Claude Code already reports, Claude Code's `language` setting, and whether the folders above your working directory contain `.git`. Caps and the last reading are kept in the plugin's own store on your machine. If you use the webhook, point it at an `https` address you control: the payload includes folder paths.
+**Network.** Cuota makes exactly one kind of network request: an HTTP `POST` to the webhook URL you set in its settings. With no webhook set, which is the default, it makes no network requests at all. It contacts no other host, never downloads anything and never acts on the webhook's response. Point the webhook at an `https` address you control.
+
+**What the webhook receives.** A JSON object with: the event (`medicion` for a new reading, `estado` for a change of state, `freno` when a message or an agent is held, `politica` when a cap changes), the session id, the working directory, the folder, the settings (default caps, wind-down margin, whether the 5-hour window brakes) and the folder's own caps, and the latest reading (percent used and reset time of each window). Each event adds its own detail: for `medicion`, the windows as Claude Code reported them; for `estado`, the previous and the new state; for `freno`, whether a message or an agent was held; for `politica`, the window and its new cap. It never includes your messages, the conversation, Claude's answers, files or code.
+
+**Commands and tools.** Cuota runs no commands, scripts or tools. The only text it sends inside Claude Code is one fixed closing message to agents that are already running when a folder reaches its cap ("this folder reached its cap; finish your current step and hand back what you have").
+
+**What it reads.** The usage percentages Claude Code already reports for your plan, Claude Code's `language` setting, and whether the folders above your working directory contain `.git`. Caps and the last reading are kept in the plugin's own store on your machine.
+
+**What each hook does.**
+
+| Hook | What it does |
+| --- | --- |
+| `session.start` | Registers the commands, finds the folder and takes the first reading |
+| `session.measure` | Takes each new reading, updates the status line and sends it to the webhook if one is set |
+| `command.run` | Answers `/cuota`, `/cuotasemanal` and `/cuotaweek` |
+| `prompt.compose` | Within the wind-down margin, adds one section to Claude's instructions asking it to wrap up; it changes nothing else |
+| `prompt.submit` | At the cap, holds new messages in that folder with a note on how to raise the cap; it never changes the text of a message, and commands, messages sent during a turn and task notifications always go through |
+| `agent.spawn` | At the cap, refuses to start new agents in that folder |
 
 ## Known limits
 

@@ -85,9 +85,26 @@ Se ajusta al instalar, o después en `/config`:
 | Idioma | auto | `auto` sigue el ajuste `language` de Claude Code (español o inglés); `es` o `en` lo fijan |
 | Webhook | vacío | URL opcional que recibe un `POST` en JSON con cada lectura, cada freno y cada cambio de límite |
 
-## Privacidad
+## Qué lee, qué envía y qué cambia
 
-Cuota no llama al modelo y no envía nada a ningún lado, salvo al webhook si configuras uno. Lee los porcentajes de uso que Claude Code ya reporta, el ajuste `language` de Claude Code y si las carpetas por encima de tu carpeta de trabajo contienen `.git`. Los límites y la última lectura se guardan en el almacenamiento propio del plugin, en tu equipo. Si usas el webhook, apúntalo a una dirección `https` que controles: el contenido incluye rutas de carpetas.
+**Red.** Cuota hace un solo tipo de petición de red: un `POST` HTTP a la URL del webhook que configures. Sin webhook, que es lo predeterminado, no hace ninguna petición de red. No contacta ningún otro servidor, nunca descarga nada y nunca actúa sobre la respuesta del webhook. Apunta el webhook a una dirección `https` que controles.
+
+**Qué recibe el webhook.** Un objeto JSON con: el evento (`medicion` para una lectura nueva, `estado` para un cambio de estado, `freno` cuando se detiene un mensaje o un agente, `politica` cuando cambia un límite), el id de la sesión, la carpeta de trabajo, la carpeta, la configuración (límites por defecto, margen de aviso y si la ventana de 5 h frena) y los límites propios de la carpeta, y la última lectura (porcentaje usado y hora de reinicio de cada ventana). Cada evento agrega su detalle: en `medicion`, las ventanas tal como las reportó Claude Code; en `estado`, el estado anterior y el nuevo; en `freno`, si se detuvo un mensaje o un agente; en `politica`, la ventana y su nuevo límite. Nunca incluye tus mensajes, la conversación, las respuestas de Claude, archivos ni código.
+
+**Comandos y herramientas.** Cuota no ejecuta comandos, scripts ni herramientas. El único texto que envía dentro de Claude Code es un mensaje fijo de cierre a los agentes que ya estén corriendo cuando una carpeta llega a su límite ("esta carpeta llegó a su límite; termina el paso en que vas y entrega lo que tengas").
+
+**Qué lee.** Los porcentajes de uso que Claude Code ya reporta para tu plan, el ajuste `language` de Claude Code y si las carpetas por encima de tu carpeta de trabajo contienen `.git`. Los límites y la última lectura se guardan en el almacenamiento propio del plugin, en tu equipo.
+
+**Qué hace cada hook.**
+
+| Hook | Qué hace |
+| --- | --- |
+| `session.start` | Registra los comandos, ubica la carpeta y toma la primera lectura |
+| `session.measure` | Toma cada lectura nueva, actualiza la línea de estado y la envía al webhook si hay uno |
+| `command.run` | Responde `/cuota`, `/cuotasemanal` y `/cuotaweek` |
+| `prompt.compose` | Dentro del margen de aviso, agrega una sección a las instrucciones de Claude pidiéndole que vaya cerrando; no cambia nada más |
+| `prompt.submit` | En el límite, detiene los mensajes nuevos de esa carpeta con una nota de cómo subir el límite; nunca cambia el texto de un mensaje, y los comandos, los mensajes enviados durante un turno y los avisos de tareas siempre pasan |
+| `agent.spawn` | En el límite, no deja iniciar agentes nuevos en esa carpeta |
 
 ## Limitaciones conocidas
 

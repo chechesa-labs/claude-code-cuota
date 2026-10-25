@@ -270,7 +270,7 @@ export const textos = {
   // La superficie antepone "cuota: " a la salida de un comando: el texto empieza ya con la explicación.
   ayuda: (idioma: Idioma, error?: string) => {
     const s = `/${comandoDe('semana', idioma)}`
-    const col = (c: string) => c.padEnd(22)
+    const col = (c: string) => `${c}:`
     return (
       (error ? (idioma === 'es' ? `No entendí "${error}".\n\n` : `Did not understand "${error}".\n\n`) : '') +
       (idioma === 'es'
@@ -371,7 +371,7 @@ export const informe = (
       : 'Cap reached: new messages in this folder wait.',
   }[ev.estado]
 
-  const col = (c: string) => c.padEnd(22)
+  const col = (c: string) => `${c}:`
   const cambios: string[] = []
   for (const v of ['cinco', 'semana'] as const) {
     const c = `/${comandoDe(v, idioma)}`

@@ -51,7 +51,7 @@ export const vigente = (lectura: Lectura, ahora: number): Lectura => {
   return r
 }
 
-export const topeDe =(ventana: 'cinco' | 'semana', ajustes: Ajustes, topeCarpeta?: number) =>
+export const topeDe = (ventana: 'cinco' | 'semana', ajustes: Ajustes, topeCarpeta?: number) =>
   topeCarpeta ?? (ventana === 'cinco' ? ajustes.topeCinco : ajustes.topeSemana)
 
 const RANGO: Record<Estado, number> = { 'sin-datos': 0, libre: 1, normal: 2, cerrando: 3, frenado: 4 }
@@ -135,7 +135,7 @@ const T = {
   es: {
     semana: 'semana',
     tope: 'tope',
-    faltan: 'faltan',
+    faltan: 'quedan',
     libre: 'libre',
     sinDatos: 'sin lectura todavía',
     cerrando: 've cerrando',
@@ -178,8 +178,8 @@ export const lineaDeEstado = (
   else {
     const tc = topeDe('cinco', ajustes, topeCarpeta)
     const ts = topeDe('semana', ajustes, topeCarpeta)
-    partes.push(tc === ts ? `${t.tope} ${tc}` : `${t.tope} ${tc}/${ts}`)
-    if (ev.faltan !== undefined && ev.estado !== 'frenado') partes.push(`${t.faltan} ${ev.faltan}`)
+    partes.push(tc === ts ? `${t.tope} ${tc} %` : `${t.tope} ${tc}/${ts} %`)
+    if (ev.faltan !== undefined && ev.estado !== 'frenado') partes.push(idioma === 'es' ? `${t.faltan} ${ev.faltan} %` : `${ev.faltan} % ${t.faltan}`)
     if (ev.estado === 'frenado') {
       partes.push(t.paraSeguir(siguienteNivel(topeDe(ev.manda ?? 'semana', ajustes, topeCarpeta))))
     }
@@ -213,8 +213,8 @@ export const textos = {
 
   toastCerrando: (idioma: Idioma, ventana: 'cinco' | 'semana', faltan: number) =>
     idioma === 'es'
-      ? `Faltan ${faltan} puntos para el tope en ${nombreVentana(ventana, idioma)}: le pedí a Claude que vaya cerrando.`
-      : `${faltan} points left before the cap on ${nombreVentana(ventana, idioma)}: Claude was asked to wind down.`,
+      ? `Quedan ${faltan} % antes del tope en ${nombreVentana(ventana, idioma)}: le pedí a Claude que vaya cerrando.`
+      : `${faltan} % left before the cap on ${nombreVentana(ventana, idioma)}: Claude was asked to wind down.`,
 
   toastFrenado: (idioma: Idioma, ventana: 'cinco' | 'semana', nivel: number) =>
     idioma === 'es'

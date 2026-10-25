@@ -60,7 +60,7 @@ test('debajo del tope todo pasa', async ($, on) => {
 test('en el tope frena prompts y agentes nuevos, y /cuota 90 desbloquea', async ($, on) => {
   const pantalla = motor(on, [{ kind: 'seven_day', percentUsed: 82 }])
   await $.session.start(arrancar)
-  expect(pantalla.status).toBe('frenado · semana 82 % · tope 80 · /cuota 90 para seguir')
+  expect(pantalla.status).toBe('frenado · semana 82 % · tope 80 % · /cuota 90 para seguir')
   expect(pantalla.toasts[0]).toMatch(/Tope alcanzado en la semana/)
 
   expect((await $.prompt.submit(prompt('otra ronda'))).drop).toMatch(/\/cuota 90/)
@@ -85,7 +85,7 @@ test('una sesión nueva sin lectura usa la última guardada mientras siga vigent
     },
   })
   await $.session.start(arrancar)
-  expect(pantalla.status).toBe('frenado · semana 85 % · tope 80 · /cuota 90 para seguir')
+  expect(pantalla.status).toBe('frenado · semana 85 % · tope 80 % · /cuota 90 para seguir')
   expect((await $.prompt.submit(prompt('x'))).drop).toBeDefined()
 })
 

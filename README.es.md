@@ -4,7 +4,7 @@
 
 Tu plan de Claude tiene dos ventanas de uso, una de 5 horas y una semanal, y todo lo que haces las comparte: el trabajo de clientes, los proyectos personales, las pruebas. Una tarde intensa en un proyecto personal puede consumir la semana entera, y el trabajo que importa se detiene.
 
-Funciona en la **extensión de Claude Code para VS Code**.
+Para Claude Code en la **terminal** y en la **extensión de VS Code**.
 
 **Cuota** pone un límite a cada carpeta, como el celular limita los datos por aplicación. Cada proyecto tiene un límite por defecto (80% de cada ventana). Diez puntos antes del límite, Claude empieza a cerrar lo que trae. En el límite, esa carpeta deja de aceptar mensajes nuevos, y lo que esté haciendo Claude se completa sin cortarse. Un comando sube el límite en las carpetas que lo necesitan.
 
@@ -33,7 +33,7 @@ Requisitos: una versión reciente de Claude Code con soporte de mods (módulos d
 | Dónde | Estado |
 | --- | --- |
 | Extensión de Claude Code para VS Code | Probado en uso diario (2.1.310): línea de estado, comandos, aviso de cierre y freno |
-| Claude Code en la terminal | Corre sobre el mismo sistema de mods; todavía no lo hemos probado en una sesión real |
+| Claude Code en la terminal | Carga y responde `/cuota` (probado con `claude -p`); la línea de estado en sesión interactiva todavía no la hemos probado |
 
 La extensión de VS Code usa la misma configuración de Claude Code que la terminal, así que con instalarlo una vez Cuota carga en las dos. En VS Code la línea de estado aparece sobre la caja de mensajes, precedida de `cuota plugin`.
 

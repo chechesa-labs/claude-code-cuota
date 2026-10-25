@@ -4,7 +4,7 @@
 
 Your Claude plan has two usage windows, a 5-hour one and a weekly one, and they are shared by everything you do: client work, side projects, experiments. One busy afternoon on a hobby project can use up the whole week, and the work that matters stops.
 
-Works in the **Claude Code extension for VS Code**.
+For Claude Code in the **terminal** and in the **VS Code extension**.
 
 **Cuota** puts a cap on each folder, the way a phone caps data per app. Every project gets a default cap (80% of each window). Ten points before the cap, Claude starts wrapping up. At the cap, that folder stops taking new messages, while whatever Claude is doing finishes without being cut off. One command raises the cap for the folders that need it.
 
@@ -33,7 +33,7 @@ Requirements: a recent Claude Code with mod (plugin hooks module) support, teste
 | Where | Status |
 | --- | --- |
 | Claude Code extension for VS Code | Tested in daily use (2.1.310): status line, commands, wind-down and brake |
-| Claude Code in the terminal | Runs on the same mod system; not yet tested by us in a live session |
+| Claude Code in the terminal | Loads and answers `/cuota` (tested with `claude -p`); the interactive status line not yet tested by us |
 
 The VS Code extension uses the same Claude Code settings as the terminal, so installing once makes Cuota load in both. In VS Code the status line shows above the message box, prefixed with `cuota plugin`.
 

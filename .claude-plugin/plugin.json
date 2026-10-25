@@ -12,7 +12,8 @@
     "quota",
     "rate-limit",
     "budget",
-    "statusline"
+    "statusline",
+    "vscode"
   ],
   "userConfig": {
     "topeCincoHoras": {

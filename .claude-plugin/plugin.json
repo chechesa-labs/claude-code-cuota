@@ -1,0 +1,48 @@
+{
+  "name": "cuota",
+  "displayName": "Cuota: usage budget per project for Claude Code",
+  "version": "0.1.0",
+  "description": "Per-folder caps on your plan's 5-hour and weekly usage: a default cap for every project, unlocks per folder, and a wind-down before the brake.",
+  "author": { "name": "Chechesa Labs" },
+  "license": "MIT",
+  "keywords": ["usage", "quota", "rate-limit", "budget", "statusline"],
+  "userConfig": {
+    "topeCincoHoras": {
+      "type": "number",
+      "title": "Tope por defecto, ventana de 5 h (%)",
+      "description": "Porcentaje de la ventana de 5 horas a partir del cual se frena (o se avisa) en carpetas sin política propia. Default cap for the 5-hour window.",
+      "default": 80
+    },
+    "topeSemanal": {
+      "type": "number",
+      "title": "Tope por defecto, ventana semanal (%)",
+      "description": "Porcentaje de la ventana semanal a partir del cual se frena en carpetas sin política propia. Default cap for the weekly window.",
+      "default": 80
+    },
+    "cincoHorasFrena": {
+      "type": "boolean",
+      "title": "La ventana de 5 h frena",
+      "description": "Si está apagado, la ventana de 5 h solo avisa al llegar al tope. When off, the 5-hour window only warns.",
+      "default": true
+    },
+    "margenAviso": {
+      "type": "number",
+      "title": "Margen del aviso \"ve cerrando\" (puntos)",
+      "description": "Cuántos puntos antes del tope se pide cerrar lo que está en curso. Points before the cap where the wind-down starts.",
+      "default": 10
+    },
+    "idioma": {
+      "type": "string",
+      "title": "Idioma / Language",
+      "description": "es o en.",
+      "options": ["es", "en"],
+      "default": "es"
+    },
+    "webhook": {
+      "type": "string",
+      "title": "Webhook (opcional)",
+      "description": "URL que recibe un POST JSON con cada medición y cada freno. Vacío, no se envía nada. Optional URL that receives a JSON POST on each reading and each brake.",
+      "default": ""
+    }
+  }
+}

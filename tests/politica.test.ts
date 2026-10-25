@@ -98,10 +98,10 @@ test('una política guardada por la v0.1 vale para las dos ventanas', () => {
 })
 
 test('rutas de Windows y POSIX', () => {
-  expect(claveDe('D:\\IA\\cuota\\')).toBe('d:/ia/cuota')
+  expect(claveDe('C:\\Proyectos\\App\\')).toBe('c:/proyectos/app')
   expect(claveDe('/home/a/b')).toBe('/home/a/b')
-  expect(padreDe('D:\\IA\\cuota')).toBe('D:\\IA')
-  expect(padreDe('D:\\IA')).toBe('D:\\')
+  expect(padreDe('C:\\proyectos\\app')).toBe('C:\\proyectos')
+  expect(padreDe('C:\\proyectos')).toBe('C:\\')
   expect(padreDe('/home/a')).toBe('/home')
   expect(padreDe('/home')).toBe('/')
 })

@@ -116,7 +116,7 @@ export const siguienteNivel = (tope: number) => (tope < 90 ? 90 : 100)
 export const comandoDe = (ventana: VentanaId, idioma: Idioma) =>
   ventana === 'cinco' ? 'cuota' : idioma === 'es' ? 'cuotasemanal' : 'cuotaweek'
 
-/** `D:\IA\cuota\` y `d:/IA/cuota` son la misma carpeta. */
+/** `C:\proyectos\app\` y `c:/proyectos/app` son la misma carpeta. */
 export const claveDe = (ruta: string) => {
   const r = ruta.replace(/\\/g, '/').replace(/\/+$/, '')
   return /^[A-Za-z]:/.test(r) ? r.toLowerCase() : r

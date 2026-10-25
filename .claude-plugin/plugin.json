@@ -7,6 +7,11 @@
     "name": "Chechesa Labs"
   },
   "license": "MIT",
+  "homepage": "https://github.com/chechesa-labs/claude-code-cuota",
+  "repository": "https://github.com/chechesa-labs/claude-code-cuota",
+  "documentationUrl": "https://github.com/chechesa-labs/claude-code-cuota#readme",
+  "supportUrl": "https://github.com/chechesa-labs/claude-code-cuota/issues",
+  "privacyPolicyUrl": "https://github.com/chechesa-labs/claude-code-cuota/blob/main/PRIVACY.md",
   "keywords": [
     "usage",
     "quota",

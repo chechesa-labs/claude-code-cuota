@@ -1,0 +1,14 @@
+{
+  "name": "chechesa-labs",
+  "description": "Plugins by Chechesa Labs for Claude Code.",
+  "owner": {
+    "name": "Chechesa Labs"
+  },
+  "plugins": [
+    {
+      "name": "cuota",
+      "source": "./",
+      "description": "Per-folder caps on your plan's 5-hour and weekly usage: a default cap for every project, unlocks per folder, and a wind-down before the brake."
+    }
+  ]
+}

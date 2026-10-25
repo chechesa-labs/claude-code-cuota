@@ -87,9 +87,12 @@ test('órdenes de los comandos', () => {
   expect(ordenDe('default sobre-80')).toEqual({ tipo: 'quitar', objetivo: { tipo: 'sobre', n: 80 } })
   expect(ordenDe('default over 80%')).toEqual({ tipo: 'quitar', objetivo: { tipo: 'sobre', n: 80 } })
   expect(ordenDe('85 Lora-Baker nova')).toEqual({ tipo: 'fijar', tope: 85, objetivo: { tipo: 'nombres', nombres: ['lora-baker', 'nova'] } })
-  expect(ordenDe('100 temporal')).toEqual({ tipo: 'fijar', tope: 100, temporal: true })
+  expect(ordenDe('100-temporal')).toEqual({ tipo: 'fijar', tope: 100, temporal: true })
+  expect(ordenDe('90-temp nova')).toEqual({ tipo: 'fijar', tope: 90, temporal: true, objetivo: { tipo: 'nombres', nombres: ['nova'] } })
+  // Separado, "temporal" es el nombre de una carpeta.
+  expect(ordenDe('100 temporal')).toEqual({ tipo: 'fijar', tope: 100, objetivo: { tipo: 'nombres', nombres: ['temporal'] } })
   expect(ordenDe('90 todas').tipo).toBe('ayuda')
-  expect(ordenDe('default temporal').tipo).toBe('ayuda')
+  expect(ordenDe('default-temporal').tipo).toBe('ayuda')
 })
 
 test('comando de cada ventana según el idioma', () => {

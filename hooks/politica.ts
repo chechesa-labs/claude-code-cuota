@@ -165,8 +165,12 @@ export const ordenDe = (args: string): Orden => {
   if (['lista', 'list', 'todas', 'all'].includes(a)) return { tipo: 'lista' }
   if (['ayuda', 'help', '?'].includes(a)) return { tipo: 'ayuda' }
 
-  const [primero, ...resto] = a.split(/\s+/)
+  const [orden, ...resto] = a.split(/\s+/)
   const error = { tipo: 'ayuda', error: a } as const
+  // `100-temporal`: lo temporal va pegado al límite; separado, "temporal" sería el nombre de una carpeta.
+  const pegadoTemporal = /^(.+)-(?:temporal|temp)$/.exec(orden)
+  const primero = pegadoTemporal ? pegadoTemporal[1] : orden
+  const temporal = pegadoTemporal !== null
   let base: { tipo: 'fijar'; tope: number } | { tipo: 'quitar' }
   if (['default', 'reset', 'quitar', 'remove'].includes(primero)) base = { tipo: 'quitar' }
   else if (['libre', 'free'].includes(primero)) base = { tipo: 'fijar', tope: 100 }
@@ -177,13 +181,11 @@ export const ordenDe = (args: string): Orden => {
   }
 
   let objetivo: Objetivo | undefined
-  let temporal = false
   const nombres: string[] = []
   for (let i = 0; i < resto.length; i++) {
     const t = resto[i]
     const pegado = /^(?:sobre|over|>)-?(\d{1,3})%?$/.exec(t)
-    if (['temporal', 'temp'].includes(t)) temporal = true
-    else if (['todas', 'all'].includes(t)) objetivo = { tipo: 'todas' }
+    if (['todas', 'all'].includes(t)) objetivo = { tipo: 'todas' }
     else if (pegado) objetivo = { tipo: 'sobre', n: Number(pegado[1]) }
     else if (['sobre', 'over', '>'].includes(t) && numero(resto[i + 1] ?? '') !== undefined) {
       objetivo = { tipo: 'sobre', n: numero(resto[++i]) as number }
@@ -391,7 +393,7 @@ export const textos = {
             `  ${col('/cuota default')} regresa la de 5 h al límite de todas las carpetas`,
             `  ${col(`${s} default`)} lo mismo con la semanal`,
             `  ${col('/cuota lista')} las carpetas con límite propio y su nombre corto`,
-            `  ${col('/cuota 100 temporal')} sin límite hasta que se reinicie la ventana; después regresa solo`,
+            `  ${col('/cuota 100-temporal')} sin límite hasta que se reinicie la ventana; después regresa solo`,
             `  ${col('/cuota 85 lora-baker nova')} cambia varias carpetas por su nombre`,
             `  ${col('/cuota default lora-baker nova')} regresa varias carpetas al límite de todas`,
             `  ${col('/cuota default sobre-80')} regresa solo las que están arriba de 80%`,
@@ -406,7 +408,7 @@ export const textos = {
             `  ${col('/cuota default')} back to the default 5-hour cap`,
             `  ${col(`${s} default`)} the same for the weekly cap`,
             `  ${col('/cuota list')} folders with their own caps and their short names`,
-            `  ${col('/cuota 100 temp')} no cap until the window resets; then it goes back by itself`,
+            `  ${col('/cuota 100-temp')} no cap until the window resets; then it goes back by itself`,
             `  ${col('/cuota 85 lora-baker nova')} changes several folders by name`,
             `  ${col('/cuota default lora-baker nova')} sets several folders back to the default`,
             `  ${col('/cuota default over-80')} only the ones above 80%`,

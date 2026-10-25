@@ -144,7 +144,7 @@ test('temporal: sube hasta el reinicio y después regresa solo al valor de antes
     politicas: { '/proyectos/cliente': { cinco: 60, ruta: '/proyectos/cliente', desde: '2026-10-20' } },
   })
   await $.session.start(arrancar)
-  const r = (await $.command.run(cuota('100 temporal'))).text ?? ''
+  const r = (await $.command.run(cuota('100-temporal'))).text ?? ''
   expect(r.split('\n')[0]).toMatch(/^Listo: esta carpeta no tiene límite de 5 h hasta que se reinicie la ventana \(.+\); después regresa a 60%\.$/)
   expect((await $.command.run(cuota('lista'))).text).toMatch(/cliente: 5 h sin límite hasta .+ · semana el de todas/)
 })
@@ -152,7 +152,7 @@ test('temporal: sube hasta el reinicio y después regresa solo al valor de antes
 test('temporal sin lectura no cambia nada', async ($, on) => {
   motor(on, [])
   await $.session.start(arrancar)
-  expect((await $.command.run(cuota('90 temporal'))).text).toContain('no sé cuándo se reinicia')
+  expect((await $.command.run(cuota('90-temporal'))).text).toContain('no sé cuándo se reinicia')
   expect((await $.command.run(cuota('lista'))).text).toBe('Ninguna carpeta tiene límite propio.')
 })
 

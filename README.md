@@ -59,7 +59,7 @@ braked · 5 h 80% · week 34% · cap 80% · /cuota 90 to go on
 | `/cuota 100` | Removes this folder's 5-hour cap (also `/cuota free`) |
 | `/cuota default` | Back to the default 5-hour cap |
 | `/cuotaweek default` | Back to the default weekly cap |
-| `/cuota 100 temp` | No 5-hour cap until the window resets; then it goes back by itself |
+| `/cuota 100-temp` | No 5-hour cap until the window resets; then it goes back by itself |
 | `/cuota list` | Every folder with its own caps and its short name |
 | `/cuota 85 lora-baker nova` | Changes several folders by short name (parent/name when two folders share a name) |
 | `/cuota default lora-baker nova` | Sets several folders back to the default 5-hour cap |

@@ -13,13 +13,13 @@ Your Claude plan has two usage windows, a 5-hour one and a weekly one, and they 
 At the prompt of a Claude Code terminal session:
 
 ```
-/plugin install cuota --marketplace chechesa-labs/cuota
+/plugin install cuota --marketplace chechesa-labs/claude-code-cuota
 ```
 
 Or from a shell:
 
 ```
-claude plugin install cuota --marketplace chechesa-labs/cuota
+claude plugin install cuota --marketplace chechesa-labs/claude-code-cuota
 ```
 
 Answer `y` to add the marketplace, then choose the scope (user scope applies it to every project). New sessions load it from then on.
@@ -76,7 +76,7 @@ Set them when installing, or later in `/config`:
 
 ## Privacy
 
-Cuota makes no model calls and sends nothing anywhere, except to the webhook if you set one. Caps and the last reading are kept in the plugin's own store on your machine. If you use the webhook, point it at an `https` address you control: the payload includes folder paths.
+Cuota makes no model calls and sends nothing anywhere, except to the webhook if you set one. It reads the usage percentages Claude Code already reports, Claude Code's `language` setting, and whether the folders above your working directory contain `.git`. Caps and the last reading are kept in the plugin's own store on your machine. If you use the webhook, point it at an `https` address you control: the payload includes folder paths.
 
 ## Known limits
 
@@ -91,3 +91,5 @@ Maintained by Chechesa Labs. We use it daily in our own work and in our clients'
 ## License
 
 [MIT](LICENSE)
+
+Cuota is an independent project by Chechesa Labs. It is not affiliated with, endorsed by or sponsored by Anthropic. Claude and Claude Code are trademarks of Anthropic.

@@ -41,6 +41,8 @@ const cuota = (args: string) =>
     presentation: { isFullscreen: false, columns: 80 },
   }) as const
 
+const semanal = (args: string) => ({ ...cuota(args), command: 'cuotasemanal' }) as const
+
 const agente = {
   tool_use_id: 't1',
   prompt: 'investiga',
@@ -58,23 +60,39 @@ test('debajo del tope todo pasa', async ($, on) => {
   expect(await $.prompt.submit(prompt('hola'))).toEqual({ text: 'hola' })
 })
 
-test('en el tope frena prompts y agentes nuevos, y /cuota 90 desbloquea', async ($, on) => {
+test('en el límite semanal frena prompts y agentes nuevos, y /cuotasemanal 90 desbloquea', async ($, on) => {
   const pantalla = motor(on, [{ kind: 'seven_day', percentUsed: 82 }])
   await $.session.start(arrancar)
-  expect(pantalla.status).toBe('frenado · semana 82% · límite 80% · /cuota 90 para seguir')
+  expect(pantalla.status).toBe('frenado · semana 82% · límite 80% · /cuotasemanal 90 para seguir')
   expect(pantalla.toasts[0]).toMatch(/Límite alcanzado en la semana/)
 
-  expect((await $.prompt.submit(prompt('otra ronda'))).drop).toMatch(/\/cuota 90/)
+  expect((await $.prompt.submit(prompt('otra ronda'))).drop).toContain('/cuotasemanal 90')
   expect((await $.agent.spawn(agente)).deny).toMatch(/límite/)
 
-  const salida = await $.command.run(cuota('90'))
-  expect(salida.text).toContain('Límite: 90% (propio de esta carpeta)')
+  // /cuota es la ventana de 5 h: no desbloquea la semanal.
+  await $.command.run(cuota('90'))
+  expect((await $.prompt.submit(prompt('otra ronda'))).drop).toBeDefined()
+
+  const salida = await $.command.run(semanal('90'))
+  expect(salida.text).toContain('Semana: 82% usado · límite 90% (propio de esta carpeta)')
+  expect(salida.text).toContain('5 h: sin lectura · límite 90% (propio de esta carpeta)')
   expect(salida.text).toMatch(/^Carpeta: \/proyectos\/cliente$/m)
   expect(await $.prompt.submit(prompt('otra ronda'))).toEqual({ text: 'otra ronda' })
   expect((await $.agent.spawn(agente)).deny).toBeUndefined()
 
-  await $.command.run(cuota('quitar'))
+  const regreso = await $.command.run(semanal('default'))
+  expect(regreso.text).toContain('límite 80% (el de todas las carpetas)')
   expect((await $.prompt.submit(prompt('y otra'))).drop).toBeDefined()
+})
+
+test('una política de la v0.1 sigue valiendo para las dos ventanas', async ($, on) => {
+  motor(on, [{ kind: 'seven_day', percentUsed: 85 }], {
+    politicas: { '/proyectos/cliente': { tope: 90, ruta: '/proyectos/cliente', desde: '2026-10-24' } },
+  })
+  await $.session.start(arrancar)
+  expect(await $.prompt.submit(prompt('x'))).toEqual({ text: 'x' })
+  const salida = await $.command.run(cuota(''))
+  expect(salida.text).toContain('Semana: 85% usado · límite 90% (propio de esta carpeta)')
 })
 
 test('una sesión nueva sin lectura usa la última guardada mientras siga vigente', async ($, on) => {
@@ -86,7 +104,7 @@ test('una sesión nueva sin lectura usa la última guardada mientras siga vigent
     },
   })
   await $.session.start(arrancar)
-  expect(pantalla.status).toBe('frenado · semana 85% · límite 80% · /cuota 90 para seguir')
+  expect(pantalla.status).toBe('frenado · semana 85% · límite 80% · /cuotasemanal 90 para seguir')
   expect((await $.prompt.submit(prompt('x'))).drop).toBeDefined()
 })
 
@@ -140,6 +158,6 @@ test('cerca del tope agrega la sección de cierre al prompt de sistema', async (
 test('con Claude Code en inglés, la interfaz sale en inglés', async ($, on) => {
   const pantalla = motor(on, [{ kind: 'seven_day', percentUsed: 82 }], {}, 'english')
   await $.session.start(arrancar)
-  expect(pantalla.status).toBe('braked · week 82% · cap 80% · /cuota 90 to go on')
+  expect(pantalla.status).toBe('braked · week 82% · cap 80% · /cuotaweek 90 to go on')
   expect((await $.prompt.submit(prompt('more'))).drop).toMatch(/reached its cap/)
 })

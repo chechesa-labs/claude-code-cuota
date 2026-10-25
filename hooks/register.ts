@@ -4,21 +4,23 @@ import {
   type Estado,
   type Idioma,
   type Lectura,
+  type Politica,
+  type VentanaId,
   claveDe,
   evaluar,
+  idiomaDe,
   informe,
   leer,
   lineaDeEstado,
   ordenDe,
   padreDe,
+  propiosDe,
   siguienteNivel,
   textos,
   topeDe,
   vigente,
-  idiomaDe,
 } from './politica'
 
-type Politica = { tope: number; ruta: string; desde: string }
 type Politicas = Record<string, Politica>
 
 const CLAVE_STORE = 'politicas'
@@ -41,8 +43,8 @@ async function politicas($: EngineInterface): Promise<Politicas> {
   return v !== null && typeof v === 'object' ? (v as Politicas) : {}
 }
 
-async function topeCarpeta($: EngineInterface) {
-  return carpeta === undefined ? undefined : (await politicas($))[claveDe(carpeta)]?.tope
+async function propiosCarpeta($: EngineInterface) {
+  return carpeta === undefined ? undefined : propiosDe((await politicas($))[claveDe(carpeta)])
 }
 
 /** La raíz del repositorio git que contiene `cwd`; sin git, el propio `cwd`. */
@@ -66,7 +68,7 @@ async function avisar($: EngineInterface, evento: string, extra: Record<string, 
     session: await $.session.id(),
     cwd: await $.session.cwd(),
     carpeta,
-    politica: { tope: await topeCarpeta($), ...ajustes },
+    politica: { propios: await propiosCarpeta($), ...ajustes },
     lectura,
     ...extra,
   }
@@ -92,16 +94,16 @@ async function avisarAgentes($: EngineInterface) {
 /** Recalcula el estado, pinta la línea y avisa en las transiciones. */
 async function refrescar($: EngineInterface) {
   await asegurarCarpeta($)
-  const tope = await topeCarpeta($)
-  const ev = evaluar(lectura, ajustes, tope)
-  $.ui.status(lineaDeEstado(lectura, ev, ajustes, idioma, tope))
+  const propios = await propiosCarpeta($)
+  const ev = evaluar(lectura, ajustes, propios)
+  $.ui.status(lineaDeEstado(lectura, ev, ajustes, idioma, propios))
 
   if (ev.estado !== ultimo) {
     if (ev.estado === 'cerrando' && ultimo !== 'frenado' && ev.manda) {
       $.ui.toast(textos.toastCerrando(idioma, ev.manda, ev.faltan ?? 0), { timeoutMs: 8000 })
     }
     if (ev.estado === 'frenado' && ev.manda) {
-      $.ui.toast(textos.toastFrenado(idioma, ev.manda, siguienteNivel(topeDe(ev.manda, ajustes, tope))), {
+      $.ui.toast(textos.toastFrenado(idioma, ev.manda, siguienteNivel(topeDe(ev.manda, ajustes, propios))), {
         timeoutMs: 10000,
       })
       await avisarAgentes($)
@@ -109,9 +111,9 @@ async function refrescar($: EngineInterface) {
     if (ultimo !== 'sin-datos' || ev.estado === 'frenado') await avisar($, 'estado', { de: ultimo, a: ev.estado })
     ultimo = ev.estado
   }
-  if (ev.avisoCinco && !avisoCincoDado) $.ui.toast(textos.toastAvisoCinco(idioma, topeDe('cinco', ajustes, tope)))
+  if (ev.avisoCinco && !avisoCincoDado) $.ui.toast(textos.toastAvisoCinco(idioma, topeDe('cinco', ajustes, propios)))
   avisoCincoDado = ev.avisoCinco
-  return { ev, tope }
+  return { ev, propios }
 }
 
 /** La cuota es de la cuenta: la última lectura de cualquier sesión sirve a las demás. */
@@ -135,47 +137,53 @@ async function resolverIdioma($: EngineInterface) {
   idioma = idiomaDe(ajustesClaude?.language)
 }
 
-async function registrarComando($: EngineInterface) {
+/** `/cuota` (ventana de 5 h) y el de la semanal en el idioma de la interfaz. */
+async function registrarComandos($: EngineInterface) {
+  const pista = '[90 | 100 | n | default | lista]'
   try {
-    await $.command.register({
-      name: 'cuota',
-      description: textos.descripcionComando(idioma),
-      argumentHint: idioma === 'es' ? '[90 | 100 | n | quitar | lista]' : '[90 | 100 | n | remove | list]',
-      immediate: true,
-    })
+    await $.command.register({ name: 'cuota', description: textos.descripcionCinco(idioma), argumentHint: pista, immediate: true })
   } catch {
     // Si el nombre choca con otro comando, lo demás del mod sigue funcionando.
   }
+  try {
+    if (idioma === 'es') {
+      await $.command.register({ name: 'cuotasemanal', description: textos.descripcionSemana(idioma), argumentHint: pista, immediate: true })
+    } else {
+      await $.command.register({ name: 'cuotaweek', description: textos.descripcionSemana(idioma), argumentHint: pista, immediate: true })
+    }
+  } catch {
+    // Igual que arriba.
+  }
 }
 
-async function correrComando($: EngineInterface, args: string) {
+async function correrComando($: EngineInterface, args: string, ventana: VentanaId) {
   const raiz = await asegurarCarpeta($)
   const orden = ordenDe(args)
-  const es = idioma === 'es'
 
   if (orden.tipo === 'ayuda') return textos.ayuda(idioma, orden.error)
 
   if (orden.tipo === 'lista') {
     const todas = Object.values(await politicas($))
-    if (todas.length === 0) return textos.sinPropias(idioma)
-    return todas
-      .sort((a, b) => a.ruta.localeCompare(b.ruta))
-      .map(p => `${p.tope >= 100 ? (es ? 'sin límite' : 'no cap') : `${p.tope}%`}  ${p.ruta}  (${p.desde})`)
-      .join('\n')
+    return todas.length === 0 ? textos.sinPropias(idioma) : textos.lista(idioma, todas)
   }
 
   if (orden.tipo === 'fijar' || orden.tipo === 'quitar') {
     const todas = await politicas($)
-    if (orden.tipo === 'fijar') {
-      const desde = new Date(await $.clock.now()).toISOString().slice(0, 10)
-      todas[claveDe(raiz)] = { tope: orden.tope, ruta: raiz, desde }
-    } else delete todas[claveDe(raiz)]
+    const clave = claveDe(raiz)
+    const desde = new Date(await $.clock.now()).toISOString().slice(0, 10)
+    // El `tope` de la v0.1 valía para las dos ventanas: se reparte antes de cambiar una.
+    const previos = propiosDe(todas[clave]) ?? {}
+    const nueva: Politica = { ...previos, ruta: raiz, desde }
+    if (orden.tipo === 'fijar') nueva[ventana] = orden.tope
+    else delete nueva[ventana]
+    if (nueva.cinco === undefined && nueva.semana === undefined) delete todas[clave]
+    else todas[clave] = nueva
     await $.store.set(CLAVE_STORE, todas)
-    await avisar($, 'politica', { tope: orden.tipo === 'fijar' ? orden.tope : null })
+    await avisar($, 'politica', { ventana, tope: orden.tipo === 'fijar' ? orden.tope : null })
   }
 
-  const { ev, tope } = await refrescar($)
-  return informe(raiz, lectura, ev, ajustes, idioma, tope)
+  const { ev, propios } = await refrescar($)
+  return informe(raiz, lectura, ev, ajustes, idioma, propios)
 }
 
 export const register: Register = (on, options) => {
@@ -193,7 +201,7 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     await resolverIdioma($)
-    await registrarComando($)
+    await registrarComandos($)
     const r = await next(e)
     carpeta = await raizDe($, e.cwd)
     const { rateLimits } = await $.session.usage()
@@ -213,7 +221,11 @@ export const register: Register = (on, options) => {
     return r
   })
 
-  on('command.run', { command: 'cuota' }, async ($, e) => ({ text: await correrComando($, e.args) }))
+  // ------------------------------------------------------------ comandos
+
+  on('command.run', { command: 'cuota' }, async ($, e) => ({ text: await correrComando($, e.args, 'cinco') }))
+  on('command.run', { command: 'cuotasemanal' }, async ($, e) => ({ text: await correrComando($, e.args, 'semana') }))
+  on('command.run', { command: 'cuotaweek' }, async ($, e) => ({ text: await correrComando($, e.args, 'semana') }))
 
   // ------------------------------------------------------------ cierre y freno
 
@@ -233,10 +245,10 @@ export const register: Register = (on, options) => {
     // Siempre pasan: los comandos (incluido /cuota para desbloquear), los avisos de tareas en curso
     // y los mensajes que llegan a un turno en marcha (`turnId`), que pueden ser instrucciones de cierre.
     if (e.command !== undefined || e.turnId !== undefined || e.origin.kind === 'task-notification') return next(e)
-    const { ev, tope } = await refrescar($)
+    const { ev, propios } = await refrescar($)
     if (ev.estado !== 'frenado' || !ev.manda) return next(e)
     await avisar($, 'freno', { motivo: 'prompt' })
-    return { drop: textos.rechazoPrompt(idioma, ev.manda, siguienteNivel(topeDe(ev.manda, ajustes, tope))) }
+    return { drop: textos.rechazoPrompt(idioma, ev.manda, siguienteNivel(topeDe(ev.manda, ajustes, propios))) }
   })
 
   on('agent.spawn', async ($, e, next) => {

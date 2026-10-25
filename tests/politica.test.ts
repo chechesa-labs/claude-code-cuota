@@ -38,10 +38,10 @@ test('la de 5 h configurada para solo avisar no frena', () => {
 
 test('la línea de estado empieza con la cifra y sugiere el desbloqueo', () => {
   const l = { cinco: { uso: 42 }, semana: { uso: 61 } }
-  expect(lineaDeEstado(l, evaluar(l, AJUSTES), AJUSTES, 'es')).toBe('5 h 42 % · semana 61 % · tope 80 % · quedan 19 %')
+  expect(lineaDeEstado(l, evaluar(l, AJUSTES), AJUSTES, 'es')).toBe('5 h 42% · semana 61% · tope 80% · quedan 19%')
   const f = { cinco: { uso: 20 }, semana: { uso: 81 } }
   expect(lineaDeEstado(f, evaluar(f, AJUSTES), AJUSTES, 'es')).toBe(
-    'frenado · 5 h 20 % · semana 81 % · tope 80 % · /cuota 90 para seguir',
+    'frenado · 5 h 20% · semana 81% · tope 80% · /cuota 90 para seguir',
   )
 })
 

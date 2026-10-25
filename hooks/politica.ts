@@ -156,7 +156,7 @@ const T = {
   },
 } as const
 
-const pct = (n: number) => `${Math.round(n)} %`
+const pct = (n: number) => `${Math.round(n)}%`
 
 export const lineaDeEstado = (
   lectura: Lectura,
@@ -178,8 +178,8 @@ export const lineaDeEstado = (
   else {
     const tc = topeDe('cinco', ajustes, topeCarpeta)
     const ts = topeDe('semana', ajustes, topeCarpeta)
-    partes.push(tc === ts ? `${t.tope} ${tc} %` : `${t.tope} ${tc}/${ts} %`)
-    if (ev.faltan !== undefined && ev.estado !== 'frenado') partes.push(idioma === 'es' ? `${t.faltan} ${ev.faltan} %` : `${ev.faltan} % ${t.faltan}`)
+    partes.push(tc === ts ? `${t.tope} ${tc}%` : `${t.tope} ${tc}/${ts}%`)
+    if (ev.faltan !== undefined && ev.estado !== 'frenado') partes.push(idioma === 'es' ? `${t.faltan} ${ev.faltan}%` : `${ev.faltan}% ${t.faltan}`)
     if (ev.estado === 'frenado') {
       partes.push(t.paraSeguir(siguienteNivel(topeDe(ev.manda ?? 'semana', ajustes, topeCarpeta))))
     }
@@ -213,8 +213,8 @@ export const textos = {
 
   toastCerrando: (idioma: Idioma, ventana: 'cinco' | 'semana', faltan: number) =>
     idioma === 'es'
-      ? `Quedan ${faltan} % antes del tope en ${nombreVentana(ventana, idioma)}: le pedí a Claude que vaya cerrando.`
-      : `${faltan} % left before the cap on ${nombreVentana(ventana, idioma)}: Claude was asked to wind down.`,
+      ? `Quedan ${faltan}% antes del tope en ${nombreVentana(ventana, idioma)}: le pedí a Claude que vaya cerrando.`
+      : `${faltan}% left before the cap on ${nombreVentana(ventana, idioma)}: Claude was asked to wind down.`,
 
   toastFrenado: (idioma: Idioma, ventana: 'cinco' | 'semana', nivel: number) =>
     idioma === 'es'
@@ -223,8 +223,8 @@ export const textos = {
 
   toastAvisoCinco: (idioma: Idioma, tope: number) =>
     idioma === 'es'
-      ? `La ventana de 5 h pasó el ${tope} %. Solo aviso: no frena (así está configurada).`
-      : `The 5-hour window passed ${tope} %. Warning only: it does not brake (as configured).`,
+      ? `La ventana de 5 h pasó el ${tope}%. Solo aviso: no frena (así está configurada).`
+      : `The 5-hour window passed ${tope}%. Warning only: it does not brake (as configured).`,
 
   rechazoPrompt: (idioma: Idioma, ventana: 'cinco' | 'semana', nivel: number) =>
     idioma === 'es'
@@ -241,7 +241,7 @@ export const textos = {
     (idioma === 'es'
       ? [
           '/cuota           ver la política y el consumo de esta carpeta',
-          '/cuota 90        subir el tope de esta carpeta a 90 %',
+          '/cuota 90        subir el tope de esta carpeta a 90%',
           '/cuota 100       dejarla libre (también: /cuota libre)',
           '/cuota 85        cualquier número de 1 a 100',
           '/cuota quitar    volver al tope por defecto',
@@ -249,7 +249,7 @@ export const textos = {
         ]
       : [
           '/cuota           show this folder\'s policy and usage',
-          '/cuota 90        raise this folder\'s cap to 90 %',
+          '/cuota 90        raise this folder\'s cap to 90%',
           '/cuota 100       free it (also: /cuota free)',
           '/cuota 85        any number from 1 to 100',
           '/cuota remove    back to the default cap',
@@ -279,15 +279,15 @@ export const informe = (
   const politica =
     topeCarpeta === undefined
       ? es
-        ? `por defecto (5 h ${ajustes.topeCinco} %${ajustes.cincoFrena ? '' : ', solo avisa'}; semana ${ajustes.topeSemana} %)`
-        : `default (5 h ${ajustes.topeCinco} %${ajustes.cincoFrena ? '' : ', warning only'}; week ${ajustes.topeSemana} %)`
+        ? `por defecto (5 h ${ajustes.topeCinco}%${ajustes.cincoFrena ? '' : ', solo avisa'}; semana ${ajustes.topeSemana}%)`
+        : `default (5 h ${ajustes.topeCinco}%${ajustes.cincoFrena ? '' : ', warning only'}; week ${ajustes.topeSemana}%)`
       : topeCarpeta >= 100
         ? es
-          ? 'libre (100 %)'
-          : 'free (100 %)'
+          ? 'libre (100%)'
+          : 'free (100%)'
         : es
-          ? `propia, ${topeCarpeta} % en ambas ventanas`
-          : `own, ${topeCarpeta} % on both windows`
+          ? `propia, ${topeCarpeta}% en ambas ventanas`
+          : `own, ${topeCarpeta}% on both windows`
   const lineas = [
     `${es ? 'Carpeta' : 'Folder'}: ${carpeta}`,
     `${es ? 'Política' : 'Policy'}: ${politica}`,

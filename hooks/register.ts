@@ -154,7 +154,7 @@ async function correrComando($: EngineInterface, args: string) {
     if (todas.length === 0) return es ? 'Ninguna carpeta tiene política propia.' : 'No folder has its own policy.'
     return todas
       .sort((a, b) => a.ruta.localeCompare(b.ruta))
-      .map(p => `${p.tope >= 100 ? (es ? 'libre' : 'free') : `${p.tope} %`}  ${p.ruta}  (${p.desde})`)
+      .map(p => `${p.tope >= 100 ? (es ? 'libre' : 'free') : `${p.tope}%`}  ${p.ruta}  (${p.desde})`)
       .join('\n')
   }
 

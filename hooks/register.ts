@@ -2,10 +2,12 @@ import type { EngineInterface, Register, SessionRateLimit } from 'claude-code'
 import {
   type Ajustes,
   type Estado,
+  type Evaluacion,
   type Idioma,
   type Lectura,
   type Politica,
   type Objetivo,
+  type TopesCarpeta,
   type VentanaId,
   aplicar,
   buscar,
@@ -31,6 +33,11 @@ type Politicas = Record<string, Politica>
 const CLAVE_STORE = 'politicas'
 const CLAVE_LECTURA = 'ultimaLectura'
 
+// En el límite solo se detiene lo que manda el usuario (o algo suyo programado) para empezar trabajo
+// nuevo. Lo demás pasa: agentes, tareas y otras sesiones, porque ahí llega el avance que un agente
+// entrega al pausar (probado 2026-10-29: detenerlo dejaba el informe sin leer).
+const FRENABLES = new Set(['composer', 'bridge', 'sdk', 'scheduled-trigger', 'auto-continuation', 'slack-ping', 'channel'])
+
 // Lo de esta activación. Un recargo del mod lo reinicia y session.start lo vuelve a llenar;
 // las políticas viven en $.store y sobreviven.
 let ajustes: Ajustes = { topeCinco: 80, topeSemana: 80, cincoFrena: true, margen: 10 }
@@ -42,6 +49,25 @@ let lectura: Lectura = {}
 let ultimo: Estado = 'sin-datos'
 let avisoCincoDado = false
 const agentesAvisados = new Set<string>()
+// El estado que ya conoce cada loop ('' es la conversación principal), para avisarle solo cuando cambia.
+const avisados = new Map<string, Estado>()
+let ultimoEv: Evaluacion = { estado: 'sin-datos', avisoCinco: false }
+let ultimosPropios: TopesCarpeta | undefined
+
+/** El aviso para un loop que todavía no conoce el estado actual; undefined si ya lo conoce. */
+function avisoNuevo(loop: string): string | undefined {
+  const { estado, manda } = ultimoEv
+  const antes = avisados.get(loop)
+  if (estado === antes || estado === 'sin-datos') return undefined
+  if ((estado === 'cerrando' || estado === 'frenado') && manda) {
+    avisados.set(loop, estado)
+    const uso = Math.round(lectura[manda]?.uso ?? 0)
+    const tope = topeDe(manda, ajustes, ultimosPropios)
+    return textos.avisoModelo(idioma, estado === 'frenado', loop !== '', manda, uso, tope, lectura[manda]?.reinicio)
+  }
+  avisados.delete(loop)
+  return antes === undefined ? undefined : textos.avisoLevantado(idioma)
+}
 
 /** Las políticas guardadas, con los límites temporales vencidos ya regresados a su valor anterior. */
 async function politicas($: EngineInterface): Promise<Politicas> {
@@ -132,6 +158,8 @@ async function refrescar($: EngineInterface) {
   await lecturaVigente($)
   const propios = await propiosCarpeta($)
   const ev = evaluar(lectura, ajustes, propios)
+  ultimoEv = ev
+  ultimosPropios = propios
   $.ui.status(lineaDeEstado(lectura, ev, ajustes, idioma, propios))
 
   if (ev.estado !== ultimo) {
@@ -238,7 +266,10 @@ async function correrComando($: EngineInterface, args: string, ventana: VentanaI
       await refrescar($)
       const cortos = nombresCortos([...new Map(conocidas.map(r => [claveDe(r), r])).values()])
       const defecto = ventana === 'cinco' ? ajustes.topeCinco : ajustes.topeSemana
-      return textos.enLote(idioma, ventana, tope, defecto, rutas.map(r => cortos.get(r) ?? r), hasta)
+      const texto = textos.enLote(idioma, ventana, tope, defecto, rutas.map(r => cortos.get(r) ?? r), hasta)
+      // La respuesta de un comando corrido a mitad de turno se ve al final; el toast confirma al instante.
+      $.ui.toast(texto)
+      return texto
     }
     const t = todas[claveDe(raiz)]?.temporal?.[ventana]
     if (t) temporal = { hasta: t.hasta, despues: t.antes ?? (ventana === 'cinco' ? ajustes.topeCinco : ajustes.topeSemana) }
@@ -246,7 +277,9 @@ async function correrComando($: EngineInterface, args: string, ventana: VentanaI
 
   const { ev, propios } = await refrescar($)
   const cambio = orden.tipo === 'fijar' || orden.tipo === 'quitar' ? ventana : undefined
-  return informe(raiz, lectura, ev, ajustes, idioma, propios, cambio, temporal)
+  const texto = informe(raiz, lectura, ev, ajustes, idioma, propios, cambio, temporal)
+  if (cambio) $.ui.toast(texto.split('\n')[0])
+  return texto
 }
 
 export const register: Register = (on, options) => {
@@ -293,26 +326,35 @@ export const register: Register = (on, options) => {
 
   // ------------------------------------------------------------ cierre y freno
 
-  on('prompt.compose', async ($, e, next) => {
+  // El aviso al modelo viaja junto a lo que ya va a leer (el resultado de una herramienta o el mensaje
+  // del usuario) y solo cuando cambia el estado. En el prompt de sistema reescribiría la caché en cada cambio.
+  on('tool.call', async ($, e, next) => {
     const r = await next(e)
-    const { ev } = await refrescar($)
-    if (ev.estado !== 'cerrando' && ev.estado !== 'frenado') return r
-    return {
-      sections: [
-        ...r.sections,
-        { id: 'cuota:cierre', text: textos.seccionCierre(idioma, ev.estado === 'frenado'), scope: 'session' as const },
-      ],
-    }
+    if (r.deny !== undefined) return r
+    const aviso = avisoNuevo(e.agentId ?? '')
+    return aviso === undefined ? r : { ...r, context: [...(r.context ?? []), aviso] }
+  })
+
+  // El resumen de una compactación puede perder el aviso: se repite en lo siguiente que lea el modelo.
+  on('session.compact', async ($, e, next) => {
+    const r = await next(e)
+    avisados.delete('')
+    return r
   })
 
   on('prompt.submit', async ($, e, next) => {
-    // Siempre pasan: los comandos (incluido /cuota para desbloquear), los avisos de tareas en curso
-    // y los mensajes que llegan a un turno en marcha (`turnId`), que pueden ser instrucciones de cierre.
-    if (e.command !== undefined || e.turnId !== undefined || e.origin.kind === 'task-notification') return next(e)
-    const { ev, propios } = await refrescar($)
-    if (ev.estado !== 'frenado' || !ev.manda) return next(e)
-    await avisar($, 'freno', { motivo: 'prompt' })
-    return { drop: textos.rechazoPrompt(idioma, ev.manda, siguienteNivel(topeDe(ev.manda, ajustes, propios))) }
+    // Siempre pasan: los comandos (incluido /cuota para desbloquear), los mensajes que llegan a un
+    // turno en marcha (`turnId`), que pueden ser instrucciones de cierre, y lo que no es del usuario.
+    if (e.command !== undefined) return next(e)
+    if (e.turnId === undefined && e.isMeta !== true && FRENABLES.has(e.origin.kind)) {
+      const { ev, propios } = await refrescar($)
+      if (ev.estado === 'frenado' && ev.manda) {
+        await avisar($, 'freno', { motivo: 'prompt' })
+        return { drop: textos.rechazoPrompt(idioma, ev.manda, siguienteNivel(topeDe(ev.manda, ajustes, propios))) }
+      }
+    }
+    const aviso = avisoNuevo('')
+    return next(aviso === undefined ? e : { ...e, context: [...(e.context ?? []), aviso] })
   })
 
   on('agent.spawn', async ($, e, next) => {

@@ -274,7 +274,7 @@ const T = {
     quedan: (n: number) => `quedan ${n}%`,
     sinLimite: 'sin límite',
     sinDatos: 'sin lectura todavía',
-    cerrando: 've cerrando',
+    cerrando: 'cerca del límite',
     frenado: 'frenado',
     sobreLimite: 'sobre el límite',
     paraSeguir: (c: string, n: number) => `/${c} ${n} para seguir`,
@@ -285,7 +285,7 @@ const T = {
     quedan: (n: number) => `${n}% left`,
     sinLimite: 'no cap',
     sinDatos: 'no reading yet',
-    cerrando: 'wind down',
+    cerrando: 'near the cap',
     frenado: 'braked',
     sobreLimite: 'over cap',
     paraSeguir: (c: string, n: number) => `/${c} ${n} to go on`,
@@ -330,30 +330,52 @@ const nombreVentana = (v: VentanaId, idioma: Idioma) =>
   v === 'cinco' ? (idioma === 'es' ? 'la ventana de 5 h' : 'the 5-hour window') : idioma === 'es' ? 'la semana' : 'the week'
 
 export const textos = {
-  seccionCierre: (idioma: Idioma, frenado: boolean) =>
+  /**
+   * Lo que lee el modelo (no el usuario) al cambiar de estado. Cerca del límite solo informa: el trabajo
+   * sigue igual de completo. En el límite pide pausar en un punto seguro, guardar el avance y dar opciones.
+   * Un agente (`agente`) le entrega su avance a quien lo lanzó en vez de hablarle al usuario.
+   */
+  avisoModelo: (
+    idioma: Idioma,
+    frenado: boolean,
+    agente: boolean,
+    ventana: VentanaId,
+    uso: number,
+    tope: number,
+    reinicio?: string,
+  ) => {
+    const es = idioma === 'es'
+    const nombre = nombreVentana(ventana, idioma)
+    const cuando = reinicio ? ` (${fechaDe(reinicio)})` : ''
+    const seguir = `/${comandoDe(ventana, idioma)} ${siguienteNivel(tope)}`
+    if (!frenado) {
+      return es
+        ? `Aviso del mod Cuota, no del usuario: ${nombre} del plan va en ${uso}% y esta carpeta tiene límite ${tope}% (quedan ${Math.max(tope - uso, 0)}%). Sigue con lo que el usuario pidió, con la calidad y el detalle de siempre: no recortes el trabajo ni resumas respuestas por este aviso. Ve dejando el avance en un estado que se pueda reanudar. Si se llega al límite, este mod te avisará. No hace falta mencionarle este aviso al usuario: lo ve en su línea de estado.`
+        : `Notice from the Cuota mod, not from the user: ${nombre} of the plan is at ${uso}% and this folder has a ${tope}% cap (${Math.max(tope - uso, 0)}% left). Keep doing what the user asked, with the usual quality and detail: do not cut the work short or summarize answers because of this notice. Keep your progress in a state that can be resumed. If the cap is reached, this mod will tell you. There is no need to mention this notice to the user: they see it in the status line.`
+    }
+    const inicio = es
+      ? `Aviso del mod Cuota, no del usuario: esta carpeta llegó a su límite de ${tope}% en ${nombre} del plan (va en ${uso}%).`
+      : `Notice from the Cuota mod, not from the user: this folder reached its ${tope}% cap on ${nombre} of the plan (now at ${uso}%).`
+    if (agente) return `${inicio} ${textos.mensajeAgente(idioma).replace(/^[^.]+\. /, '')}`
+    return es
+      ? `${inicio} Pausa la tarea en el siguiente punto seguro: termina el paso en curso y guarda el avance donde el proyecto lo guarde (qué quedó hecho, qué falta, siguiente paso). No empieces pasos nuevos ni lances agentes. Luego dile al usuario, en pocas palabras, que pausaste para no gastar la cuota que esta carpeta deja en reserva, dónde quedó el avance y sus dos opciones: seguir ahora con ${seguir}, usando esa reserva, o retomar después del reinicio${cuando}. Si el usuario pide seguir, sigue.`
+      : `${inicio} Pause the task at the next safe point: finish the current step and save the progress where the project keeps it (what is done, what is left, next step). Do not start new steps or launch agents. Then tell the user, briefly, that you paused so as not to spend the usage this folder keeps in reserve, where the progress is, and their two options: go on now with ${seguir}, using that reserve, or resume after the reset${cuando}. If the user asks you to go on, go on.`
+  },
+
+  avisoLevantado: (idioma: Idioma) =>
     idioma === 'es'
-      ? [
-          'Cuota del plan: esta carpeta está cerca de su límite de uso' + (frenado ? ' y ya lo alcanzó' : '') + '.',
-          'Cierra lo que tienes en curso sin abrir frentes nuevos: termina el paso actual, deja escrito el estado',
-          '(qué quedó hecho, qué falta, siguiente paso) donde el proyecto lo guarde, y no lances agentes nuevos.',
-          'Dilo en una línea al usuario al terminar.',
-        ].join(' ')
-      : [
-          'Plan usage: this folder is close to its usage cap' + (frenado ? ' and has reached it' : '') + '.',
-          'Wrap up what is in progress without starting anything new: finish the current step, write down the state',
-          '(what is done, what is left, next step) where the project keeps it, and do not launch new agents.',
-          'Tell the user in one line when done.',
-        ].join(' '),
+      ? 'Aviso del mod Cuota, no del usuario: esta carpeta ya no está cerca de su límite de uso; el aviso anterior ya no aplica.'
+      : 'Notice from the Cuota mod, not from the user: this folder is no longer close to its usage cap; the earlier notice no longer applies.',
 
   mensajeAgente: (idioma: Idioma) =>
     idioma === 'es'
-      ? 'Cuota del plan: esta carpeta llegó a su límite. Termina el paso en que vas, entrega lo que tengas con lo que falta, y no abras trabajo nuevo.'
-      : 'Plan usage: this folder reached its cap. Finish your current step, hand back what you have with what is left, and start nothing new.',
+      ? 'Cuota del plan: esta carpeta llegó a su límite. Pausa en el siguiente punto seguro: termina el paso en curso y entrega tu avance completo, sin resumirlo, con lo que falta y cómo retomarlo. No empieces pasos nuevos ni lances agentes.'
+      : 'Plan usage: this folder reached its cap. Pause at the next safe point: finish the current step and hand back your full progress, without summarizing it, with what is left and how to resume. Do not start new steps or launch agents.',
 
   toastCerrando: (idioma: Idioma, ventana: VentanaId, faltan: number) =>
     idioma === 'es'
-      ? `Quedan ${faltan}% antes del límite en ${nombreVentana(ventana, idioma)}: le pedí a Claude que vaya cerrando.`
-      : `${faltan}% left before the cap on ${nombreVentana(ventana, idioma)}: Claude was asked to wind down.`,
+      ? `Quedan ${faltan}% antes del límite en ${nombreVentana(ventana, idioma)}: Claude ya está avisado.`
+      : `${faltan}% left before the cap on ${nombreVentana(ventana, idioma)}: Claude has been told.`,
 
   toastFrenado: (idioma: Idioma, ventana: VentanaId, nivel: number) =>
     idioma === 'es'
@@ -535,8 +557,8 @@ export const informe = (
     libre: es ? 'Esta carpeta no tiene límite.' : 'This folder has no cap.',
     normal: es ? `Quedan ${quedan}% antes del límite.` : `${quedan}% left before the cap.`,
     cerrando: es
-      ? `Quedan ${quedan}% antes del límite: Claude está cerrando lo que trae.`
-      : `${quedan}% left before the cap: Claude is wrapping up.`,
+      ? `Quedan ${quedan}% antes del límite: Claude ya está avisado.`
+      : `${quedan}% left before the cap: Claude has been told.`,
     frenado: es
       ? 'Límite alcanzado: los mensajes nuevos de esta carpeta esperan.'
       : 'Cap reached: new messages in this folder wait.',

@@ -6,7 +6,7 @@ Your Claude plan has two usage windows, a 5-hour one and a weekly one, and they 
 
 For Claude Code in the **terminal** and in the **VS Code extension**.
 
-**Cuota** puts a cap on each folder, the way a phone caps data per app. Every project gets a default cap (80% of each window). Ten points before the cap, Claude starts wrapping up. At the cap, that folder stops taking new messages, while whatever Claude is doing finishes without being cut off. One command raises the cap for the folders that need it.
+**Cuota** puts a cap on each folder, the way a phone caps data per app. Every project gets a default cap (80% of each window). Ten points before the cap, Claude gets a notice and keeps working as usual, leaving its progress ready to resume. At the cap, Claude pauses at a safe point, saves the progress and tells you how to go on; that folder stops taking new messages, and nothing is cut off halfway. One command raises the cap for the folders that need it.
 
 ![Cuota in action](docs/demo-en.gif)
 
@@ -32,7 +32,7 @@ Requirements: a recent Claude Code with mod (plugin hooks module) support, teste
 
 | Where | Status |
 | --- | --- |
-| Claude Code extension for VS Code | Tested in daily use (2.1.310): status line, commands, wind-down and brake |
+| Claude Code extension for VS Code | Tested in daily use (2.1.310 to 2.1.312): status line, commands, brake, and notice and pause in the middle of a task, background agents included |
 | Claude Code in the terminal | Loads and answers `/cuota` (tested with `claude -p`); the interactive status line not yet tested by us |
 
 The VS Code extension uses the same Claude Code settings as the terminal, so installing once makes Cuota load in both. In VS Code the status line shows above the message box, prefixed with `cuota plugin`.
@@ -43,7 +43,7 @@ A status line under the prompt, starting with the figures:
 
 ```
 5 h 46% · week 33% · cap 80% · 34% left
-wind down · 5 h 72% · week 34% · cap 80% · 8% left
+near the cap · 5 h 72% · week 34% · cap 80% · 8% left
 braked · 5 h 80% · week 34% · cap 80% · /cuota 90 to go on
 ```
 
@@ -72,9 +72,10 @@ Commands are answered by the plugin itself: they never reach the model, use no t
 ## How it decides
 
 - **A folder** is the root of the git repository you are in; outside git, the working directory.
-- **Wind down:** within 10 points of a cap, Cuota adds a short instruction for Claude: finish the current step, write down the state, start nothing new, and do not launch new agents. Claude still answers you as usual.
-- **Brake:** at the cap, new messages in that folder are held with a note on how to raise the cap, and new agents are not started. The turn in progress is never cut off. Messages you send while Claude is working still get through, so you can give wrap-up instructions.
-- **Running agents** get a message asking them to finish their step and hand back what they have.
+- **Wind down:** within 10 points of a cap, Cuota tells Claude, in the middle of a task if needed. The notice asks it not to cut the work short or summarize answers, only to keep its progress ready to resume. Claude still answers you as usual.
+- **Pause:** at the cap, Claude finishes the current step, saves the progress where the project keeps it, and tells you your two options: go on now by raising the cap (using the reserve) or resume after the reset.
+- **Brake:** at the cap, new messages in that folder are held with a note on how to raise the cap, and new agents are not started. The turn in progress is never cut off. Messages you send while Claude is working still get through, so you can give wrap-up instructions, and so does the progress agents hand back when they pause.
+- **Running agents** get a message asking them to pause at a safe point and hand back their full progress, with what is left and how to resume.
 - **Readings are shared** across sessions: a new session starts from the last reading any session saw, until that window resets.
 
 ## Settings
@@ -96,7 +97,7 @@ Set them when installing, or later in `/config`:
 
 **What the webhook receives.** A JSON object with: the event (`medicion` for a new reading, `estado` for a change of state, `freno` when a message or an agent is held, `politica` when a cap changes), the session id, the working directory, the folder, the settings (default caps, wind-down margin, whether the 5-hour window brakes) and the folder's own caps, and the latest reading (percent used and reset time of each window). Each event adds its own detail: for `medicion`, the windows as Claude Code reported them; for `estado`, the previous and the new state; for `freno`, whether a message or an agent was held; for `politica`, the window and its new cap. It never includes your messages, the conversation, Claude's answers, files or code.
 
-**Commands and tools.** Cuota runs no commands, scripts or tools. The only text it sends inside Claude Code is one fixed closing message to agents that are already running when a folder reaches its cap ("this folder reached its cap; finish your current step and hand back what you have").
+**Commands and tools.** Cuota runs no commands, scripts or tools. The only things it writes inside Claude Code are short notices for Claude, which you do not see: one when the folder enters the wind-down margin or reaches its cap (with the window and the percentages), another when the notice no longer applies, and one fixed closing message to agents that are already running when the folder reaches its cap ("this folder reached its cap; pause at the next safe point and hand back your full progress"). Each notice is sent once per change of state.
 
 **What it reads.** The usage percentages Claude Code already reports for your plan, Claude Code's `language` setting, and whether the folders above your working directory contain `.git`. Caps and the last reading are kept in the plugin's own store on your machine.
 
@@ -107,14 +108,13 @@ Set them when installing, or later in `/config`:
 | `session.start` | Registers the commands, finds the folder and takes the first reading |
 | `session.measure` | Takes each new reading, updates the status line and sends it to the webhook if one is set |
 | `command.run` | Answers `/cuota`, `/cuotasemanal` and `/cuotaweek` |
-| `prompt.compose` | Within the wind-down margin, adds one section to Claude's instructions asking it to wrap up; it changes nothing else |
-| `prompt.submit` | At the cap, holds new messages in that folder with a note on how to raise the cap; it never changes the text of a message, and commands, messages sent during a turn and task notifications always go through |
+| `tool.call` | When the state changes, attaches the notice for Claude to the next tool result, so it reads it in the middle of a task; it changes neither the tool nor its result |
+| `prompt.submit` | At the cap, holds new messages in that folder with a note on how to raise the cap. When the state changes, attaches the notice for Claude next to the message. It never changes the text of a message, and commands, messages sent during a turn and task notifications always go through |
+| `session.compact` | After a compaction, sends the current notice again, in case the summary dropped it |
 | `agent.spawn` | At the cap, refuses to start new agents in that folder |
 
 ## Known limits
 
-- Whether the closing message reaches an agent that is already running, and whether the wind-down instruction reaches agents as well as the main conversation, has not been verified in a live session yet.
-- Where an organization manages Claude Code through managed settings, the wind-down instruction only runs if the organization lists the plugin there; the status line, the commands and the brake work either way.
 - Caps work on the percentages Anthropic reports for your plan. The 100% limit itself is Anthropic's and applies to your whole account.
 
 ## Maintenance

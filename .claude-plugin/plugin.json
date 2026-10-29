@@ -1,7 +1,7 @@
 {
   "name": "cuota",
   "displayName": "Cuota: usage budget per project",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Per-folder caps on your plan's 5-hour and weekly usage: a default cap for every project, unlocks per folder, and a wind-down before the brake.",
   "author": {
     "name": "Chechesa Labs"

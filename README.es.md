@@ -6,7 +6,7 @@ Tu plan de Claude tiene dos ventanas de uso, una de 5 horas y una semanal, y tod
 
 Para Claude Code en la **terminal** y en la **extensión de VS Code**.
 
-**Cuota** pone un límite a cada carpeta, como el celular limita los datos por aplicación. Cada proyecto tiene un límite por defecto (80% de cada ventana). Diez puntos antes del límite, Claude empieza a cerrar lo que trae. En el límite, esa carpeta deja de aceptar mensajes nuevos, y lo que esté haciendo Claude se completa sin cortarse. Un comando sube el límite en las carpetas que lo necesitan.
+**Cuota** pone un límite a cada carpeta, como el celular limita los datos por aplicación. Cada proyecto tiene un límite por defecto (80% de cada ventana). Diez puntos antes del límite, Claude recibe un aviso y sigue trabajando igual, dejando el avance listo para retomarlo. En el límite, Claude pausa en un punto seguro, guarda el avance y te dice cómo seguir; esa carpeta deja de aceptar mensajes nuevos, y nada se corta a la mitad. Un comando sube el límite en las carpetas que lo necesitan.
 
 ![Cuota en acción](docs/demo-es.gif)
 
@@ -32,7 +32,7 @@ Requisitos: una versión reciente de Claude Code con soporte de mods (módulos d
 
 | Dónde | Estado |
 | --- | --- |
-| Extensión de Claude Code para VS Code | Probado en uso diario (2.1.310): línea de estado, comandos, aviso de cierre y freno |
+| Extensión de Claude Code para VS Code | Probado en uso diario (2.1.310 a 2.1.312): línea de estado, comandos, freno, y aviso y pausa a mitad de la tarea, también en agentes en segundo plano |
 | Claude Code en la terminal | Carga y responde `/cuota` (probado con `claude -p`); la línea de estado en sesión interactiva todavía no la hemos probado |
 
 La extensión de VS Code usa la misma configuración de Claude Code que la terminal, así que con instalarlo una vez Cuota carga en las dos. En VS Code la línea de estado aparece sobre la caja de mensajes, precedida de `cuota plugin`.
@@ -43,7 +43,7 @@ Una línea de estado bajo el prompt, que empieza con las cifras:
 
 ```
 5 h 46% · semana 33% · límite 80% · quedan 34%
-ve cerrando · 5 h 72% · semana 34% · límite 80% · quedan 8%
+cerca del límite · 5 h 72% · semana 34% · límite 80% · quedan 8%
 frenado · 5 h 80% · semana 34% · límite 80% · /cuota 90 para seguir
 ```
 
@@ -72,9 +72,10 @@ Los comandos los responde el propio plugin: nunca llegan al modelo, no gastan to
 ## Cómo decide
 
 - **Una carpeta** es la raíz del repositorio git en el que estás; fuera de git, la carpeta de trabajo.
-- **Ve cerrando:** a menos de 10 puntos de un límite, Cuota agrega una instrucción breve para Claude: terminar el paso en curso, dejar el estado escrito, no abrir nada nuevo y no lanzar agentes nuevos. Claude te sigue respondiendo como siempre.
-- **Freno:** en el límite, los mensajes nuevos de esa carpeta esperan, con una nota de cómo subir el límite, y no se inician agentes nuevos. El turno en curso nunca se corta. Los mensajes que mandas mientras Claude trabaja sí pasan, para que puedas dar instrucciones de cierre.
-- **Los agentes que ya están corriendo** reciben un mensaje para terminar su paso y entregar lo que tengan.
+- **Ve cerrando:** a menos de 10 puntos de un límite, Cuota le avisa a Claude, a mitad de la tarea si hace falta. El aviso le pide no recortar el trabajo ni resumir respuestas, solo dejar el avance listo para retomarlo. Claude te sigue respondiendo como siempre.
+- **Pausa:** al llegar al límite, Claude termina el paso en curso, guarda el avance donde el proyecto lo guarde y te dice tus dos opciones: seguir ahora subiendo el límite (usando la reserva) o retomar después del reinicio.
+- **Freno:** en el límite, los mensajes nuevos de esa carpeta esperan, con una nota de cómo subir el límite, y no se inician agentes nuevos. El turno en curso nunca se corta. Los mensajes que mandas mientras Claude trabaja sí pasan, para que puedas dar instrucciones de cierre, y también el avance que entregan los agentes al pausar.
+- **Los agentes que ya están corriendo** reciben un mensaje para pausar en un punto seguro y entregar su avance completo, con lo que falta y cómo retomarlo.
 - **La lectura se comparte** entre sesiones: una sesión nueva arranca con la última lectura que vio cualquier sesión, hasta que esa ventana se reinicia.
 
 ## Configuración
@@ -96,7 +97,7 @@ Se ajusta al instalar, o después en `/config`:
 
 **Qué recibe el webhook.** Un objeto JSON con: el evento (`medicion` para una lectura nueva, `estado` para un cambio de estado, `freno` cuando se detiene un mensaje o un agente, `politica` cuando cambia un límite), el id de la sesión, la carpeta de trabajo, la carpeta, la configuración (límites por defecto, margen de aviso y si la ventana de 5 h frena) y los límites propios de la carpeta, y la última lectura (porcentaje usado y hora de reinicio de cada ventana). Cada evento agrega su detalle: en `medicion`, las ventanas tal como las reportó Claude Code; en `estado`, el estado anterior y el nuevo; en `freno`, si se detuvo un mensaje o un agente; en `politica`, la ventana y su nuevo límite. Nunca incluye tus mensajes, la conversación, las respuestas de Claude, archivos ni código.
 
-**Comandos y herramientas.** Cuota no ejecuta comandos, scripts ni herramientas. El único texto que envía dentro de Claude Code es un mensaje fijo de cierre a los agentes que ya estén corriendo cuando una carpeta llega a su límite ("esta carpeta llegó a su límite; termina el paso en que vas y entrega lo que tengas").
+**Comandos y herramientas.** Cuota no ejecuta comandos, scripts ni herramientas. Lo único que escribe dentro de Claude Code son avisos breves para Claude, que tú no ves: uno cuando la carpeta entra al margen de aviso o llega a su límite (con la ventana y los porcentajes), otro cuando el aviso deja de aplicar, y un mensaje fijo de cierre a los agentes que ya estén corriendo cuando la carpeta llega a su límite ("esta carpeta llegó a su límite; pausa en el siguiente punto seguro y entrega tu avance completo"). Cada aviso se manda una sola vez por cambio de estado.
 
 **Qué lee.** Los porcentajes de uso que Claude Code ya reporta para tu plan, el ajuste `language` de Claude Code y si las carpetas por encima de tu carpeta de trabajo contienen `.git`. Los límites y la última lectura se guardan en el almacenamiento propio del plugin, en tu equipo.
 
@@ -107,14 +108,13 @@ Se ajusta al instalar, o después en `/config`:
 | `session.start` | Registra los comandos, ubica la carpeta y toma la primera lectura |
 | `session.measure` | Toma cada lectura nueva, actualiza la línea de estado y la envía al webhook si hay uno |
 | `command.run` | Responde `/cuota`, `/cuotasemanal` y `/cuotaweek` |
-| `prompt.compose` | Dentro del margen de aviso, agrega una sección a las instrucciones de Claude pidiéndole que vaya cerrando; no cambia nada más |
-| `prompt.submit` | En el límite, detiene los mensajes nuevos de esa carpeta con una nota de cómo subir el límite; nunca cambia el texto de un mensaje, y los comandos, los mensajes enviados durante un turno y los avisos de tareas siempre pasan |
+| `tool.call` | Cuando cambia el estado, adjunta el aviso para Claude al siguiente resultado de herramienta, para que lo lea a mitad de la tarea; no cambia la herramienta ni su resultado |
+| `prompt.submit` | En el límite, detiene los mensajes nuevos de esa carpeta con una nota de cómo subir el límite. Cuando cambia el estado, adjunta el aviso para Claude junto al mensaje. Nunca cambia el texto de un mensaje, y los comandos, los mensajes enviados durante un turno y los avisos de tareas siempre pasan |
+| `session.compact` | Después de compactar, vuelve a mandar el aviso vigente, por si el resumen lo perdió |
 | `agent.spawn` | En el límite, no deja iniciar agentes nuevos en esa carpeta |
 
 ## Limitaciones conocidas
 
-- Todavía no se ha verificado en una sesión real si el mensaje de cierre llega a un agente que ya está corriendo, ni si la instrucción de "ve cerrando" llega a los agentes además de a la conversación principal.
-- Donde una organización administra Claude Code con configuración gestionada, la instrucción de "ve cerrando" solo corre si la organización incluye el plugin en esa configuración; la línea de estado, los comandos y el freno funcionan igual.
 - Los límites trabajan sobre los porcentajes que Anthropic reporta para tu plan. El límite del 100% es de Anthropic y aplica a toda tu cuenta.
 
 ## Mantenimiento

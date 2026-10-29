@@ -3,7 +3,11 @@ import { expect, mock, test } from 'claude-code/testing'
 
 // Nada corre debajo del mod: cada hook de aquí hace de motor.
 const motor = (on: On, rateLimits: SessionRateLimit[], guardado: Record<string, unknown> = {}, language = 'es') => {
-  const pantalla = { status: undefined as string | undefined, toasts: [] as string[] }
+  const pantalla = {
+    status: undefined as string | undefined,
+    toasts: [] as string[],
+    contexto: undefined as readonly string[] | undefined,
+  }
   mock.store(on, guardado)
   on('settings.read', () => ({ value: { language } }))
   mock.clock(on, { now: Date.parse('2026-10-24T20:00:00Z') })
@@ -24,7 +28,11 @@ const motor = (on: On, rateLimits: SessionRateLimit[], guardado: Record<string, 
     value: { startedAt: 0, context: { window: 200000 }, rateLimits },
   }))
   on('agent.list', () => ({ value: [] }))
-  on('prompt.submit', (_, e) => ({ text: e.text }))
+  on('prompt.submit', (_, e) => {
+    pantalla.contexto = e.context
+    return { text: e.text }
+  })
+  on('tool.call', () => ({ result: 'ok' }))
   on('agent.spawn', () => ({ model: 'haiku', agentId: 'a1' }))
   return pantalla
 }
@@ -183,6 +191,18 @@ test('un mensaje que llega a un turno en marcha pasa aunque la carpeta esté fre
   expect((await $.prompt.submit(prompt('otra cosa'))).drop).toBeDefined()
 })
 
+test('el avance que entrega un agente, las tareas y otras sesiones pasan aunque la carpeta esté frenada', async ($, on) => {
+  motor(on, [{ kind: 'seven_day', percentUsed: 95 }])
+  await $.session.start(arrancar)
+  for (const kind of ['peer-send-message', 'peer', 'task-notification', 'unclassified', 'coordinator'] as const) {
+    expect((await $.prompt.submit({ ...prompt('informe'), origin: { kind } } as never)).drop).toBeUndefined()
+  }
+  expect((await $.prompt.submit({ ...prompt('informe'), origin: { kind: 'sdk' }, isMeta: true } as never)).drop).toBeUndefined()
+  for (const kind of ['composer', 'sdk', 'bridge', 'scheduled-trigger'] as const) {
+    expect((await $.prompt.submit({ ...prompt('trabajo nuevo'), origin: { kind } } as never)).drop).toBeDefined()
+  }
+})
+
 test('/cuota pasa aunque la carpeta esté frenada', async ($, on) => {
   motor(on, [{ kind: 'seven_day', percentUsed: 95 }])
   await $.session.start(arrancar)
@@ -208,10 +228,19 @@ test('con la de 5 h en solo aviso, el prompt pasa', { options: { cincoHorasFrena
   expect(await $.prompt.submit(prompt('x'))).toEqual({ text: 'x' })
 })
 
-test('cerca del tope agrega la sección de cierre al prompt de sistema', async ($, on) => {
-  motor(on, [{ kind: 'seven_day', percentUsed: 74 }])
+test('cerca del límite, el aviso viaja una sola vez junto al mensaje y no toca el prompt de sistema', async ($, on) => {
+  const pantalla = motor(on, [{ kind: 'seven_day', percentUsed: 74 }])
   on('prompt.compose', () => ({ sections: [{ id: 'intro', text: 'x', scope: 'shared' }] }))
   await $.session.start(arrancar)
+  await $.prompt.submit(prompt('x'))
+  expect(pantalla.contexto).toEqual([
+    'Aviso del mod Cuota, no del usuario: la semana del plan va en 74% y esta carpeta tiene límite 80% (quedan 6%). ' +
+      'Sigue con lo que el usuario pidió, con la calidad y el detalle de siempre: no recortes el trabajo ni resumas respuestas por este aviso. ' +
+      'Ve dejando el avance en un estado que se pueda reanudar. Si se llega al límite, este mod te avisará. ' +
+      'No hace falta mencionarle este aviso al usuario: lo ve en su línea de estado.',
+  ])
+  await $.prompt.submit(prompt('y'))
+  expect(pantalla.contexto).toBeUndefined()
   const r = await $.prompt.compose({
     model: 'opus',
     promptModel: 'opus',
@@ -220,7 +249,40 @@ test('cerca del tope agrega la sección de cierre al prompt de sistema', async (
     outputStyle: null,
     traits: [],
   })
-  expect(r.sections.map(s => s.id)).toEqual(['intro', 'cuota:cierre'])
+  expect(r.sections.map(s => s.id)).toEqual(['intro'])
+})
+
+test('a mitad de la tarea, el aviso llega con el siguiente resultado de herramienta de cada loop', async ($, on) => {
+  const pantalla = motor(on, [{ kind: 'seven_day', percentUsed: 60 }])
+  on('session.measure', (_, e) => ({ changed: e.changed }))
+  await $.session.start(arrancar)
+  const leer = async (agentId?: string) =>
+    (await $.tool.call({ tool: 'Read', file_path: '/x', ...(agentId ? { agentId } : {}) } as never)).context
+  expect(await leer('a1')).toBeUndefined()
+
+  const medir = (percentUsed: number) =>
+    $.session.measure({
+      context: { window: 200000 },
+      rateLimits: [{ kind: 'seven_day', percentUsed }],
+      changed: ['rateLimits'],
+    } as never)
+  await medir(73)
+  expect((await leer('a1'))?.[0]).toMatch(/^Aviso del mod Cuota, no del usuario: la semana del plan va en 73%/)
+  expect(await leer('a1')).toBeUndefined()
+  expect((await leer())?.[0]).toMatch(/quedan 7%/)
+
+  await medir(81)
+  expect((await leer('a1'))?.[0]).toMatch(
+    /llegó a su límite de 80% en la semana del plan \(va en 81%\)\. Pausa en el siguiente punto seguro: termina el paso en curso y entrega tu avance completo, sin resumirlo/,
+  )
+  const principal = (await leer())?.[0] ?? ''
+  expect(principal).toMatch(/Pausa la tarea en el siguiente punto seguro/)
+  expect(principal).toMatch(/seguir ahora con \/cuotasemanal 90, usando esa reserva, o retomar después del reinicio\./)
+
+  await $.command.run(semanal('100'))
+  expect(pantalla.toasts.at(-1)).toBe('Listo: esta carpeta ya no tiene límite semanal.')
+  expect((await leer('a1'))?.[0]).toMatch(/el aviso anterior ya no aplica/)
+  expect(await leer('a1')).toBeUndefined()
 })
 
 test('con Claude Code en inglés, la interfaz sale en inglés', async ($, on) => {

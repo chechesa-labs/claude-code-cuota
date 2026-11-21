@@ -73,9 +73,13 @@ Cerca del límite, en el límite o cuando se detuvo un mensaje, una franja de un
 | `/cuota lista` | Las carpetas con límite propio y su nombre corto |
 | `/cuota 85 lora-baker nova` | Cambia varias carpetas por su nombre corto (padre/nombre si dos carpetas se llaman igual) |
 | `/cuota default lora-baker nova` | Regresa varias carpetas al límite de 5 h de todas |
-| `/cuota default sobre-80` | Solo las carpetas con límite de 5 h arriba de 80% |
-| `/cuota default todas` | Todas las carpetas |
+| `/cuota default >80` | Solo las carpetas con límite de 5 h arriba de 80% |
+| `/cuota default *` | Todas las carpetas |
+| `/cuotasemanal 90-temporal *` | Sube a 90% el límite semanal de todas las carpetas hasta que se reinicie la ventana; las que tienen límite propio conservan el suyo. Útil al final de la semana, cuando el límite de todas frena todas las carpetas a la vez |
+| `/cuotasemanal default-temporal *` | Lo regresa antes del reinicio |
 | `/cuota ayuda` | Todas las opciones |
+
+`*` (todas las carpetas) y `>80` (las de arriba de 80%) son símbolos a propósito: cualquier palabra después del número es el nombre de una carpeta, así que un proyecto llamado `todas` se encuentra como cualquier otro.
 
 Los comandos los responde el propio plugin: nunca llegan al modelo, no gastan tokens y siempre funcionan, aunque la carpeta esté frenada.
 

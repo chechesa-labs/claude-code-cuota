@@ -83,15 +83,24 @@ test('órdenes de los comandos', () => {
   expect(ordenDe('reset')).toEqual({ tipo: 'quitar' })
   expect(ordenDe('quitar')).toEqual({ tipo: 'quitar' })
   expect(ordenDe('150').tipo).toBe('ayuda')
-  expect(ordenDe('default todas')).toEqual({ tipo: 'quitar', objetivo: { tipo: 'todas' } })
-  expect(ordenDe('default sobre-80')).toEqual({ tipo: 'quitar', objetivo: { tipo: 'sobre', n: 80 } })
-  expect(ordenDe('default over 80%')).toEqual({ tipo: 'quitar', objetivo: { tipo: 'sobre', n: 80 } })
+  expect(ordenDe('default *')).toEqual({ tipo: 'quitar', objetivo: { tipo: 'todas' } })
+  expect(ordenDe('default >80')).toEqual({ tipo: 'quitar', objetivo: { tipo: 'sobre', n: 80 } })
+  expect(ordenDe('default > 80%')).toEqual({ tipo: 'quitar', objetivo: { tipo: 'sobre', n: 80 } })
+  // Las palabras siempre son nombres de carpeta, aunque digan "todas" o "sobre-80".
+  expect(ordenDe('default todas')).toEqual({ tipo: 'quitar', objetivo: { tipo: 'nombres', nombres: ['todas'] } })
+  expect(ordenDe('85 all sobre-80')).toEqual({ tipo: 'fijar', tope: 85, objetivo: { tipo: 'nombres', nombres: ['all', 'sobre-80'] } })
+  expect(ordenDe('todas')).toEqual({ tipo: 'ayuda', error: 'todas' })
+  // El temporal de todas las carpetas.
+  expect(ordenDe('90-temporal *')).toEqual({ tipo: 'global', tope: 90 })
+  expect(ordenDe('libre-temp *')).toEqual({ tipo: 'global', tope: 100 })
+  expect(ordenDe('default-temporal *')).toEqual({ tipo: 'quitarGlobal' })
+  expect(ordenDe('90-temporal >80').tipo).toBe('ayuda')
   expect(ordenDe('85 Lora-Baker nova')).toEqual({ tipo: 'fijar', tope: 85, objetivo: { tipo: 'nombres', nombres: ['lora-baker', 'nova'] } })
   expect(ordenDe('100-temporal')).toEqual({ tipo: 'fijar', tope: 100, temporal: true })
   expect(ordenDe('90-temp nova')).toEqual({ tipo: 'fijar', tope: 90, temporal: true, objetivo: { tipo: 'nombres', nombres: ['nova'] } })
   // Separado, "temporal" es el nombre de una carpeta.
   expect(ordenDe('100 temporal')).toEqual({ tipo: 'fijar', tope: 100, objetivo: { tipo: 'nombres', nombres: ['temporal'] } })
-  expect(ordenDe('90 todas').tipo).toBe('ayuda')
+  expect(ordenDe('90 *').tipo).toBe('ayuda')
   expect(ordenDe('default-temporal').tipo).toBe('ayuda')
 })
 

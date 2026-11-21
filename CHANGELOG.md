@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Every folder at once, for a while: `/cuotaweek 90-temp *` (`/cuotasemanal 90-temporal *` in Spanish, `/cuota` for the 5-hour window) raises the default cap of every folder until the window resets, then it goes back by itself. Folders with their own cap keep it. `/cuotaweek default-temp *` sets it back sooner. Shared by every session.
+- **Changed:** "every folder" and "above 80%" are now symbols, `*` and `>80`: `/cuota default *`, `/cuota default >80`. Words after the number are always folder names, so a project named `all` or `todas` is no longer mistaken for every folder. `default all`, `default todas`, `default over-80` and `default sobre-80` now look for a folder with that name and change nothing if there is none. `/cuota all` no longer lists the folders: use `/cuota list`.
 - A one-line band above the message box, near the cap, at the cap or when a message was held: `🟡` or `🔴`, the usage and cap of each window (`5 h 3%/80% · wk 89%/85%`), and buttons. It takes the place of the status line while it shows.
 - `+5%` raises this folder's cap on the window that brakes by 5 points.
 - `↩ Message` puts the held message back in the box (at the end, if you already typed something). Pasted images and files cannot be put back: the band says how many there were so you can paste them again. The text is kept in memory for that session only, never written to disk or sent.

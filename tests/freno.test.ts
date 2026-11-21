@@ -162,17 +162,61 @@ test('en lote: lista con nombres cortos, cambiar por nombre y regresar las de ar
   expect((await $.command.run(cuota('85 nada'))).text).toContain('No encontré "nada"')
 
   expect((await $.command.run(cuota('85 lora-baker ia/cuota'))).text).toBe('Listo: límite 85% de 5 h en lora-baker, IA/cuota.')
-  expect((await $.command.run(cuota('default sobre-80'))).text).toBe(
+  expect((await $.command.run(cuota('default >80'))).text).toBe(
     'Listo: regresaron al límite de 5 h de todas las carpetas (80%): lora-baker, IA/cuota, clientes/cuota.',
   )
   const despues = (await $.command.run(cuota('lista'))).text ?? ''
   expect(despues).toContain('nova: 5 h 60%')
   expect(despues).toContain('  cuota: 5 h el de todas · semana 90% (/clientes/cuota)')
   expect(despues).not.toContain('lora-baker')
-  expect((await $.command.run(cuota('default over 80'))).text).toContain('Ninguna carpeta tiene límite de 5 h arriba de 80%')
-  expect((await $.command.run(semanal('default todas'))).text).toBe(
+  expect((await $.command.run(cuota('default > 80'))).text).toContain('Ninguna carpeta tiene límite de 5 h arriba de 80%')
+  // "todas" es un nombre como cualquier otro: si no hay carpeta con ese nombre, no cambia nada.
+  expect((await $.command.run(semanal('default todas'))).text).toContain('No encontré "todas"')
+  expect((await $.command.run(semanal('default *'))).text).toBe(
     'Listo: regresaron al límite semanal de todas las carpetas (80%): nova, cuota.',
   )
+})
+
+test('temporal de todas: sube el límite de todas las carpetas, respeta las que tienen el suyo y vence en el reinicio', async ($, on) => {
+  const reinicio = '2026-10-25T16:00:00Z'
+  const pantalla = motor(on, [{ kind: 'seven_day', percentUsed: 82, resetsAt: reinicio }], {
+    politicas: { '/hobby/nova': { semana: 50, ruta: '/hobby/nova', desde: '2026-10-20' } },
+  })
+  await $.session.start(arrancar)
+  expect((await $.prompt.submit(prompt('x'))).drop).toBeDefined()
+
+  const r = (await $.command.run(semanal('90-temporal *'))).text ?? ''
+  expect(r).toMatch(/^Listo: el límite semanal de todas las carpetas es 90% hasta el reinicio (.+); después regresa a 80%. Las carpetas con límite propio conservan el suyo.$/)
+  expect(pantalla.toasts.at(-1)).toBe(r)
+  expect(await $.prompt.submit(prompt('sigo'))).toEqual({ text: 'sigo' })
+  const ver = (await $.command.run(semanal(''))).text ?? ''
+  expect(ver).toContain('Semana: 82% usado · límite 90% (el de todas las carpetas, temporal hasta el reinicio) · se reinicia')
+
+  const lista = (await $.command.run(semanal('lista'))).text ?? ''
+  expect(lista).toMatch(/^Todas las carpetas, temporal: semana 90% hasta .+/)
+  expect(lista).toContain('nova: 5 h el de todas · semana 50%')
+
+  expect((await $.command.run(semanal('default-temporal *'))).text).toBe('Listo: el límite semanal de todas las carpetas regresó a 80%.')
+  expect((await $.prompt.submit(prompt('x'))).drop).toBeDefined()
+  expect((await $.command.run(semanal('default-temporal *'))).text).toBe(
+    'No hay un límite semanal temporal para todas las carpetas. No cambié nada.',
+  )
+})
+
+test('temporal de todas vencido: regresa solo al límite configurado', async ($, on) => {
+  motor(on, [{ kind: 'seven_day', percentUsed: 82 }], {
+    globalTemporal: { semana: { tope: 95, hasta: '2026-10-24T19:00:00Z' } },
+  })
+  await $.session.start(arrancar)
+  expect((await $.prompt.submit(prompt('x'))).drop).toBeDefined()
+})
+
+test('temporal de todas vigente que dejó otra sesión: esta lo respeta al arrancar', async ($, on) => {
+  motor(on, [{ kind: 'seven_day', percentUsed: 82 }], {
+    globalTemporal: { semana: { tope: 95, hasta: '2026-10-27T00:00:00Z' } },
+  })
+  await $.session.start(arrancar)
+  expect(await $.prompt.submit(prompt('x'))).toEqual({ text: 'x' })
 })
 
 test('temporal: sube hasta el reinicio y después regresa solo al valor de antes', async ($, on) => {

@@ -73,9 +73,13 @@ Near the cap, at the cap, or when a message was held, a one-line band with butto
 | `/cuota list` | Every folder with its own caps and its short name |
 | `/cuota 85 lora-baker nova` | Changes several folders by short name (parent/name when two folders share a name) |
 | `/cuota default lora-baker nova` | Sets several folders back to the default 5-hour cap |
-| `/cuota default over-80` | Only the folders whose 5-hour cap is above 80% |
-| `/cuota default all` | Every folder |
+| `/cuota default >80` | Only the folders whose 5-hour cap is above 80% |
+| `/cuota default *` | Every folder |
+| `/cuotaweek 90-temp *` | Raises the weekly cap of every folder to 90% until the window resets; folders with their own cap keep it. Handy near the end of the week, when the default cap brakes every folder at once |
+| `/cuotaweek default-temp *` | Sets it back before the reset |
 | `/cuota help` | All options |
+
+`*` (every folder) and `>80` (folders above 80%) are symbols on purpose: any word after the number is a folder name, so a project named `all` is found like any other.
 
 Commands are answered by the plugin itself: they never reach the model, use no tokens, and always work, even when the folder is braked.
 

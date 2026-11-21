@@ -3,6 +3,7 @@ import {
   type Ajustes,
   type Estado,
   type Evaluacion,
+  type GlobalTemporal,
   type Idioma,
   type Lectura,
   type Politica,
@@ -12,6 +13,7 @@ import {
   aplicar,
   buscar,
   claveDe,
+  conGlobal,
   evaluar,
   idiomaDe,
   informe,
@@ -32,6 +34,7 @@ type Politicas = Record<string, Politica>
 
 const CLAVE_STORE = 'politicas'
 const CLAVE_LECTURA = 'ultimaLectura'
+const CLAVE_GLOBAL = 'globalTemporal'
 
 // En el límite solo se detiene lo que manda el usuario (o algo suyo programado) para empezar trabajo
 // nuevo. Lo demás pasa: agentes, tareas y otras sesiones, porque ahí llega el avance que un agente
@@ -40,7 +43,9 @@ const FRENABLES = new Set(['composer', 'bridge', 'sdk', 'scheduled-trigger', 'au
 
 // Lo de esta activación. Un recargo del mod lo reinicia y session.start lo vuelve a llenar;
 // las políticas viven en $.store y sobreviven.
-let ajustes: Ajustes = { topeCinco: 80, topeSemana: 80, cincoFrena: true, margen: 10 }
+// `ajustesBase` es lo configurado; `ajustes`, lo mismo con el temporal global vigente encima.
+let ajustesBase: Ajustes = { topeCinco: 80, topeSemana: 80, cincoFrena: true, margen: 10 }
+let ajustes: Ajustes = ajustesBase
 let idioma: Idioma = 'es'
 let idiomaElegido = 'auto'
 let webhook = ''
@@ -119,6 +124,38 @@ async function politicas($: EngineInterface): Promise<Politicas> {
   return todas
 }
 
+/** Pone en `ajustes` el temporal global guardado; el que ya venció se borra. Lo comparten todas las sesiones. */
+async function globalVigente($: EngineInterface): Promise<GlobalTemporal> {
+  const v = await $.store.get(CLAVE_GLOBAL)
+  const guardado = v !== null && typeof v === 'object' ? (v as GlobalTemporal) : {}
+  const r = conGlobal(ajustesBase, guardado, await $.clock.now())
+  ajustes = r.ajustes
+  if (r.cambio) await $.store.set(CLAVE_GLOBAL, r.vigente)
+  return r.vigente
+}
+
+/** `90-temporal *` y `default-temporal *`: el límite de todas las carpetas hasta el reinicio de la ventana. */
+async function cambiarGlobal($: EngineInterface, ventana: VentanaId, tope: number | undefined) {
+  const g = await globalVigente($)
+  const base = ventana === 'cinco' ? ajustesBase.topeCinco : ajustesBase.topeSemana
+  let texto: string
+  if (tope === undefined) {
+    texto = textos.quitarGlobal(idioma, ventana, g[ventana] ? base : undefined)
+    if (g[ventana] === undefined) return texto
+    delete g[ventana]
+  } else {
+    const hasta = lectura[ventana]?.reinicio
+    if (hasta === undefined) return textos.sinReinicio(idioma, ventana)
+    g[ventana] = { tope, hasta }
+    texto = textos.global(idioma, ventana, tope, base, hasta)
+  }
+  await $.store.set(CLAVE_GLOBAL, g)
+  await avisar($, 'politica', { ventana, tope: tope ?? null, carpetas: '*', ...(g[ventana] ? { hasta: g[ventana].hasta } : {}) })
+  await refrescar($)
+  $.ui.toast(texto)
+  return texto
+}
+
 /** Las claves de carpeta a las que va un cambio, o el texto que explica por qué no se cambió nada. */
 function destinos(todas: Politicas, raiz: string, ventana: VentanaId, objetivo?: Objetivo): string[] | string {
   if (objetivo === undefined) return [claveDe(raiz)]
@@ -140,7 +177,7 @@ function destinos(todas: Politicas, raiz: string, ventana: VentanaId, objetivo?:
     const hallados = buscar(nombre, unicas)
     if (hallados.length === 0) return textos.noEncontre(idioma, nombre)
     if (hallados.length > 1) return textos.ambiguo(idioma, nombre, hallados.map(r => cortos.get(r) ?? r))
-    claves.add(claveDe(hallados[0]))
+    claves.add(claveDe(hallados[0] as string))
   }
   return [...claves]
 }
@@ -197,6 +234,7 @@ async function avisarAgentes($: EngineInterface) {
 async function refrescar($: EngineInterface) {
   await asegurarCarpeta($)
   await lecturaVigente($)
+  await globalVigente($)
   const propios = await propiosCarpeta($)
   const ev = evaluar(lectura, ajustes, propios)
   ultimoEv = ev
@@ -277,10 +315,16 @@ async function correrComando($: EngineInterface, args: string, ventana: VentanaI
   const orden = ordenDe(args)
 
   if (orden.tipo === 'ayuda') return textos.ayuda(idioma, orden.error)
+  if (orden.tipo === 'global') return cambiarGlobal($, ventana, orden.tope)
+  if (orden.tipo === 'quitarGlobal') return cambiarGlobal($, ventana, undefined)
 
   if (orden.tipo === 'lista') {
+    await lecturaVigente($)
+    await globalVigente($)
     const todas = Object.values(await politicas($))
-    return todas.length === 0 ? textos.sinPropias(idioma) : textos.lista(idioma, todas)
+    const global = textos.lineaGlobal(idioma, ajustes)
+    const carpetas = todas.length === 0 ? textos.sinPropias(idioma) : textos.lista(idioma, todas)
+    return global ? `${global}\n\n${carpetas}` : carpetas
   }
 
   let temporal: { hasta: string; despues: number } | undefined
@@ -320,17 +364,18 @@ async function correrComando($: EngineInterface, args: string, ventana: VentanaI
   const { ev, propios } = await refrescar($)
   const cambio = orden.tipo === 'fijar' || orden.tipo === 'quitar' ? ventana : undefined
   const texto = informe(raiz, lectura, ev, ajustes, idioma, propios, cambio, temporal)
-  if (cambio) $.ui.toast(texto.split('\n')[0])
+  if (cambio) $.ui.toast(texto.split('\n')[0] ?? texto)
   return texto
 }
 
 export const register: Register = (on, options) => {
-  ajustes = {
+  ajustesBase = {
     topeCinco: Number(options.topeCincoHoras ?? 80),
     topeSemana: Number(options.topeSemanal ?? 80),
     cincoFrena: options.cincoHorasFrena !== false,
     margen: Number(options.margenAviso ?? 10),
   }
+  ajustes = ajustesBase
   idiomaElegido = typeof options.idioma === 'string' ? options.idioma : 'auto'
   idioma = idiomaElegido === 'en' ? 'en' : 'es'
   webhook = typeof options.webhook === 'string' ? options.webhook.trim() : ''

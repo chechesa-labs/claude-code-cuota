@@ -69,6 +69,47 @@ function avisoNuevo(loop: string): string | undefined {
   return antes === undefined ? undefined : textos.avisoLevantado(idioma)
 }
 
+// El último mensaje que detuvo el freno, para la franja de botones sobre la caja. Solo en memoria:
+// el texto del usuario no se guarda en disco.
+let detenido: { texto: string; adjuntos: number; ventana: VentanaId } | undefined
+// La franja se oculta con su botón hasta el siguiente cambio de estado o mensaje detenido.
+let oculta = false
+
+function franjaVisible() {
+  return !oculta && (detenido !== undefined || ultimoEv.estado === 'cerrando' || ultimoEv.estado === 'frenado')
+}
+
+/** La franja y la línea de estado se turnan el mismo renglón: si se ve una, la otra se apaga. */
+function pintar($: EngineInterface) {
+  $.ui.status(franjaVisible() ? undefined : lineaDeEstado(lectura, ultimoEv, ajustes, idioma, ultimosPropios))
+  $.ui.invalidate('ui.render')
+}
+
+/** Pone en la caja el texto del mensaje detenido; si la caja ya tiene algo, lo agrega al final. */
+async function recargar($: EngineInterface) {
+  if (detenido === undefined) return
+  const caja = await $.prompt.read()
+  const r = await $.prompt.fill({ text: detenido.texto, mode: caja.text.trim() === '' ? 'replace' : 'append' })
+  if (!r.isFilled) {
+    $.ui.toast(textos.noRecargo(idioma, r.refusal), { timeoutMs: 8000 })
+    return
+  }
+  detenido = undefined
+  pintar($)
+}
+
+/** Sube 5 puntos el límite de esta carpeta en la ventana que manda, como si se escribiera el comando. */
+async function masCinco($: EngineInterface, ventana: VentanaId) {
+  const nuevo = Math.min(topeDe(ventana, ajustes, await propiosCarpeta($)) + 5, 100)
+  await correrComando($, String(nuevo), ventana)
+  pintar($)
+}
+
+function ocultar($: EngineInterface) {
+  oculta = true
+  pintar($)
+}
+
 /** Las políticas guardadas, con los límites temporales vencidos ya regresados a su valor anterior. */
 async function politicas($: EngineInterface): Promise<Politicas> {
   const v = await $.store.get(CLAVE_STORE)
@@ -160,7 +201,8 @@ async function refrescar($: EngineInterface) {
   const ev = evaluar(lectura, ajustes, propios)
   ultimoEv = ev
   ultimosPropios = propios
-  $.ui.status(lineaDeEstado(lectura, ev, ajustes, idioma, propios))
+  if (ev.estado !== ultimo) oculta = false
+  pintar($)
 
   if (ev.estado !== ultimo) {
     if (ev.estado === 'cerrando' && ultimo !== 'frenado' && ev.manda) {
@@ -350,11 +392,37 @@ export const register: Register = (on, options) => {
       const { ev, propios } = await refrescar($)
       if (ev.estado === 'frenado' && ev.manda) {
         await avisar($, 'freno', { motivo: 'prompt' })
+        if (e.text.trim() !== '') {
+          detenido = { texto: e.text, adjuntos: e.attachments?.length ?? 0, ventana: ev.manda }
+          oculta = false
+          pintar($)
+        }
         return { drop: textos.rechazoPrompt(idioma, ev.manda, siguienteNivel(topeDe(ev.manda, ajustes, propios))) }
       }
     }
     const aviso = avisoNuevo('')
     return next(aviso === undefined ? e : { ...e, context: [...(e.context ?? []), aviso] })
+  })
+
+  // Franja de un renglón sobre la caja, en lugar de la línea de estado: cerca del límite, frenado o con
+  // un mensaje detenido. Lejos del límite no se dibuja.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (!franjaVisible() || e.props.hasSurvey) return next(e)
+    const ventana = ultimoEv.manda ?? detenido?.ventana
+    const tope = ventana === undefined ? 100 : topeDe(ventana, ajustes, ultimosPropios)
+    const { Box, Button, Text } = $.ui.resolve(e)
+    return (
+      <Box flexDirection="row" gap={1}>
+        <Text>{textos.franja(idioma, lectura, ultimoEv, ajustes, ultimosPropios, detenido?.adjuntos)}</Text>
+        {ventana !== undefined && tope < 100 ? (
+          <Button key="mas" label={textos.botonMas()} onPress={() => masCinco($, ventana)} />
+        ) : null}
+        {detenido !== undefined ? (
+          <Button key="recargar" variant="primary" label={textos.botonRecargar(idioma)} onPress={() => recargar($)} />
+        ) : null}
+        <Button key="ocultar" label={textos.botonOcultar(idioma)} onPress={() => ocultar($)} />
+      </Box>
+    )
   })
 
   on('agent.spawn', async ($, e, next) => {

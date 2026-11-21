@@ -35,7 +35,7 @@ Requirements: a recent Claude Code with mod (plugin hooks module) support, teste
 | Claude Code extension for VS Code | Tested in daily use (2.1.310 to 2.1.312): status line, commands, brake, and notice and pause in the middle of a task, background agents included |
 | Claude Code in the terminal | Loads and answers `/cuota` (tested with `claude -p`); the interactive status line not yet tested by us |
 
-The VS Code extension uses the same Claude Code settings as the terminal, so installing once makes Cuota load in both. In VS Code the status line shows above the message box, prefixed with `cuota plugin`.
+The VS Code extension uses the same Claude Code settings as the terminal, so installing once makes Cuota load in both. In VS Code the status line shows above the message box, prefixed with `cuota plugin`. The band with buttons is tested in VS Code, not yet in the terminal.
 
 ## What you see
 
@@ -46,6 +46,16 @@ A status line under the prompt, starting with the figures:
 near the cap · 5 h 72% · week 34% · cap 80% · 8% left
 braked · 5 h 80% · week 34% · cap 80% · /cuota 90 to go on
 ```
+
+Near the cap, at the cap, or when a message was held, a one-line band with buttons takes the place of the status line:
+
+```
+🔴 5 h 3%/80% · wk 89%/85% · message held (1 att.: paste them again)  [+5%] [↩ Message] [Hide]
+```
+
+- `+5%` raises this folder's cap on the window that brakes by 5 points.
+- `↩ Message` puts the held message back in the box, so you do not have to type it again. Pasted images and files cannot be put back; the band says how many to paste again.
+- `Hide` hides the band until the state changes; the status line comes back meanwhile.
 
 ## Commands
 
@@ -99,7 +109,7 @@ Set them when installing, or later in `/config`:
 
 **Commands and tools.** Cuota runs no commands, scripts or tools. The only things it writes inside Claude Code are short notices for Claude, which you do not see: one when the folder enters the wind-down margin or reaches its cap (with the window and the percentages), another when the notice no longer applies, and one fixed closing message to agents that are already running when the folder reaches its cap ("this folder reached its cap; pause at the next safe point and hand back your full progress"). Each notice is sent once per change of state.
 
-**What it reads.** The usage percentages Claude Code already reports for your plan, Claude Code's `language` setting, and whether the folders above your working directory contain `.git`. Caps and the last reading are kept in the plugin's own store on your machine.
+**What it reads.** The usage percentages Claude Code already reports for your plan, Claude Code's `language` setting, and whether the folders above your working directory contain `.git`. Caps and the last reading are kept in the plugin's own store on your machine. When it holds a message, it keeps that message's text and the number of attachments in memory, for that session only, to put it back in the box when you press `↩ Message`; it never writes it to disk or sends it. It reads the message box only when you press that button, to add the text at the end instead of replacing what you typed.
 
 **What each hook does.**
 
@@ -109,9 +119,10 @@ Set them when installing, or later in `/config`:
 | `session.measure` | Takes each new reading, updates the status line and sends it to the webhook if one is set |
 | `command.run` | Answers `/cuota`, `/cuotasemanal` and `/cuotaweek` |
 | `tool.call` | When the state changes, attaches the notice for Claude to the next tool result, so it reads it in the middle of a task; it changes neither the tool nor its result |
-| `prompt.submit` | At the cap, holds new messages in that folder with a note on how to raise the cap. When the state changes, attaches the notice for Claude next to the message. It never changes the text of a message, and commands, messages sent during a turn and task notifications always go through |
+| `prompt.submit` | At the cap, holds new messages in that folder with a note on how to raise the cap, and keeps the held text in memory for the `↩ Message` button. When the state changes, attaches the notice for Claude next to the message. It never changes the text of a message, and commands, messages sent during a turn and task notifications always go through |
 | `session.compact` | After a compaction, sends the current notice again, in case the summary dropped it |
 | `agent.spawn` | At the cap, refuses to start new agents in that folder |
+| `ui.render` (`AbovePrompt`) | Draws the band with buttons above the message box near the cap, at the cap or when a message was held |
 
 ## Known limits
 

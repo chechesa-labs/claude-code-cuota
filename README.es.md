@@ -35,7 +35,7 @@ Requisitos: una versión reciente de Claude Code con soporte de mods (módulos d
 | Extensión de Claude Code para VS Code | Probado en uso diario (2.1.310 a 2.1.312): línea de estado, comandos, freno, y aviso y pausa a mitad de la tarea, también en agentes en segundo plano |
 | Claude Code en la terminal | Carga y responde `/cuota` (probado con `claude -p`); la línea de estado en sesión interactiva todavía no la hemos probado |
 
-La extensión de VS Code usa la misma configuración de Claude Code que la terminal, así que con instalarlo una vez Cuota carga en las dos. En VS Code la línea de estado aparece sobre la caja de mensajes, precedida de `cuota plugin`.
+La extensión de VS Code usa la misma configuración de Claude Code que la terminal, así que con instalarlo una vez Cuota carga en las dos. En VS Code la línea de estado aparece sobre la caja de mensajes, precedida de `cuota plugin`. La franja con botones está probada en VS Code; en la terminal todavía no.
 
 ## Qué ves
 
@@ -46,6 +46,16 @@ Una línea de estado bajo el prompt, que empieza con las cifras:
 cerca del límite · 5 h 72% · semana 34% · límite 80% · quedan 8%
 frenado · 5 h 80% · semana 34% · límite 80% · /cuota 90 para seguir
 ```
+
+Cerca del límite, en el límite o cuando se detuvo un mensaje, una franja de un renglón con botones toma el lugar de la línea de estado:
+
+```
+🔴 5 h 3%/80% · sem 89%/85% · mensaje detenido (1 adj.: pégalos de nuevo)  [+5%] [↩ Mensaje] [Ocultar]
+```
+
+- `+5%` sube 5 puntos el límite de esta carpeta en la ventana que frena.
+- `↩ Mensaje` regresa a la caja el mensaje detenido, para no escribirlo otra vez. Las imágenes y archivos pegados no se pueden regresar; la franja dice cuántos pegar de nuevo.
+- `Ocultar` esconde la franja hasta que cambie el estado; mientras, regresa la línea de estado.
 
 ## Comandos
 
@@ -99,7 +109,7 @@ Se ajusta al instalar, o después en `/config`:
 
 **Comandos y herramientas.** Cuota no ejecuta comandos, scripts ni herramientas. Lo único que escribe dentro de Claude Code son avisos breves para Claude, que tú no ves: uno cuando la carpeta entra al margen de aviso o llega a su límite (con la ventana y los porcentajes), otro cuando el aviso deja de aplicar, y un mensaje fijo de cierre a los agentes que ya estén corriendo cuando la carpeta llega a su límite ("esta carpeta llegó a su límite; pausa en el siguiente punto seguro y entrega tu avance completo"). Cada aviso se manda una sola vez por cambio de estado.
 
-**Qué lee.** Los porcentajes de uso que Claude Code ya reporta para tu plan, el ajuste `language` de Claude Code y si las carpetas por encima de tu carpeta de trabajo contienen `.git`. Los límites y la última lectura se guardan en el almacenamiento propio del plugin, en tu equipo.
+**Qué lee.** Los porcentajes de uso que Claude Code ya reporta para tu plan, el ajuste `language` de Claude Code y si las carpetas por encima de tu carpeta de trabajo contienen `.git`. Los límites y la última lectura se guardan en el almacenamiento propio del plugin, en tu equipo. Cuando detiene un mensaje, guarda su texto y cuántos adjuntos traía en memoria, solo durante esa sesión, para regresarlo a la caja cuando presiones `↩ Mensaje`; nunca lo escribe en disco ni lo envía. Lee la caja de mensajes solo al presionar ese botón, para agregar el texto al final en vez de reemplazar lo que hayas escrito.
 
 **Qué hace cada hook.**
 
@@ -109,9 +119,10 @@ Se ajusta al instalar, o después en `/config`:
 | `session.measure` | Toma cada lectura nueva, actualiza la línea de estado y la envía al webhook si hay uno |
 | `command.run` | Responde `/cuota`, `/cuotasemanal` y `/cuotaweek` |
 | `tool.call` | Cuando cambia el estado, adjunta el aviso para Claude al siguiente resultado de herramienta, para que lo lea a mitad de la tarea; no cambia la herramienta ni su resultado |
-| `prompt.submit` | En el límite, detiene los mensajes nuevos de esa carpeta con una nota de cómo subir el límite. Cuando cambia el estado, adjunta el aviso para Claude junto al mensaje. Nunca cambia el texto de un mensaje, y los comandos, los mensajes enviados durante un turno y los avisos de tareas siempre pasan |
+| `prompt.submit` | En el límite, detiene los mensajes nuevos de esa carpeta con una nota de cómo subir el límite, y guarda en memoria el texto detenido para el botón `↩ Mensaje`. Cuando cambia el estado, adjunta el aviso para Claude junto al mensaje. Nunca cambia el texto de un mensaje, y los comandos, los mensajes enviados durante un turno y los avisos de tareas siempre pasan |
 | `session.compact` | Después de compactar, vuelve a mandar el aviso vigente, por si el resumen lo perdió |
 | `agent.spawn` | En el límite, no deja iniciar agentes nuevos en esa carpeta |
+| `ui.render` (`AbovePrompt`) | Dibuja la franja con botones sobre la caja de mensajes cerca del límite, en el límite o cuando se detuvo un mensaje |
 
 ## Limitaciones conocidas
 

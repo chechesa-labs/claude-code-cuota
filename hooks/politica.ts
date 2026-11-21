@@ -394,6 +394,43 @@ export const textos = {
       : `cuota: this folder reached its cap on ${nombreVentana(ventana, idioma)}. Type /${c} ${nivel} to raise it, /${c} 100 to remove the cap, or wait for the reset.`
   },
 
+  /**
+   * La franja de un renglón sobre la caja, en lugar de la línea de estado: cerca del límite, frenado
+   * o con un mensaje detenido. `adjuntos` es undefined si no hay mensaje detenido.
+   */
+  franja: (
+    idioma: Idioma,
+    lectura: Lectura,
+    ev: Evaluacion,
+    ajustes: Ajustes,
+    propios: TopesCarpeta | undefined,
+    adjuntos: number | undefined,
+  ) => {
+    const es = idioma === 'es'
+    const ventana = (v: VentanaId, nombre: string) => {
+      const l = lectura[v]
+      if (!l) return undefined
+      const tope = topeDe(v, ajustes, propios)
+      return `${nombre} ${pct(l.uso)}/${tope >= 100 ? (es ? 'sin lím.' : 'no cap') : `${tope}%`}`
+    }
+    const partes = [
+      ev.estado === 'frenado' ? '🔴' : ev.estado === 'cerrando' ? '🟡' : '⚪',
+      [ventana('cinco', '5 h'), ventana('semana', es ? 'sem' : 'wk')].filter(Boolean).join(' · '),
+    ]
+    if (adjuntos !== undefined) {
+      const adj = adjuntos === 0 ? '' : es ? ` (${adjuntos} adj.: pégalos de nuevo)` : ` (${adjuntos} att.: paste them again)`
+      partes.push(`· ${es ? 'mensaje detenido' : 'message held'}${adj}`)
+    }
+    return partes.join(' ')
+  },
+  botonMas: () => '+5%',
+  botonRecargar: (idioma: Idioma) => (idioma === 'es' ? '↩ Mensaje' : '↩ Message'),
+  botonOcultar: (idioma: Idioma) => (idioma === 'es' ? 'Ocultar' : 'Hide'),
+  noRecargo: (idioma: Idioma, causa?: string) =>
+    idioma === 'es'
+      ? `No pude poner el texto en la caja${causa ? ` (${causa})` : ''}.`
+      : `Could not put the text in the prompt box${causa ? ` (${causa})` : ''}.`,
+
   rechazoAgente: (idioma: Idioma) =>
     idioma === 'es'
       ? 'cuota: esta carpeta llegó a su límite de uso; no se lanzan agentes nuevos. Termina con lo que tienes y díselo al usuario.'

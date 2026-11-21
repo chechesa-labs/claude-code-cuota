@@ -7,6 +7,7 @@ const motor = (on: On, rateLimits: SessionRateLimit[], guardado: Record<string, 
     status: undefined as string | undefined,
     toasts: [] as string[],
     contexto: undefined as readonly string[] | undefined,
+    caja: '',
   }
   mock.store(on, guardado)
   on('settings.read', () => ({ value: { language } }))
@@ -34,8 +35,30 @@ const motor = (on: On, rateLimits: SessionRateLimit[], guardado: Record<string, 
   })
   on('tool.call', () => ({ result: 'ok' }))
   on('agent.spawn', () => ({ model: 'haiku', agentId: 'a1' }))
+  on('prompt.read', () => ({ value: { text: pantalla.caja, cursor: pantalla.caja.length } }))
+  on('prompt.fill', (_, e) => {
+    pantalla.caja = e.mode === 'append' ? pantalla.caja + e.text : e.text
+    return { isFilled: true, text: pantalla.caja, cursor: pantalla.caja.length }
+  })
   return pantalla
 }
+
+// La franja sobre la caja, en la superficie que se nombre.
+const franja = (surface: 'terminal' | 'desktop' = 'terminal') =>
+  ({
+    plugin: 'cuota',
+    surface,
+    component: 'AbovePrompt',
+    props: {
+      hasSurvey: false,
+      isCollapsed: false,
+      isWorking: false,
+      maxRows: 10,
+      bodyColumns: 120,
+      scroll: { offset: 0, bodyRows: 9 },
+      view: {},
+    },
+  }) as const
 
 const arrancar = { cwd: '/proyectos/cliente/src', surface: 'vscode', isInteractive: true } as const
 
@@ -71,7 +94,12 @@ test('debajo del tope todo pasa', async ($, on) => {
 test('en el límite semanal frena prompts y agentes nuevos, y /cuotasemanal 90 desbloquea', async ($, on) => {
   const pantalla = motor(on, [{ kind: 'seven_day', percentUsed: 82 }])
   await $.session.start(arrancar)
+  expect(pantalla.status).toBeUndefined()
+  const ui = await $.ui.mount(franja())
+  expect((await ui.find({ type: 'Text' }))?.text).toBe('🔴 sem 82%/80%')
+  await ui.press({ key: 'ocultar' })
   expect(pantalla.status).toBe('frenado · semana 82% · límite 80% · /cuotasemanal 90 para seguir')
+  await ui.unmount()
   expect(pantalla.toasts[0]).toMatch(/Límite alcanzado en la semana/)
 
   expect((await $.prompt.submit(prompt('otra ronda'))).drop).toContain('/cuotasemanal 90')
@@ -180,7 +208,10 @@ test('una sesión nueva sin lectura usa la última guardada mientras siga vigent
     },
   })
   await $.session.start(arrancar)
-  expect(pantalla.status).toBe('frenado · semana 85% · límite 80% · /cuotasemanal 90 para seguir')
+  expect(pantalla.status).toBeUndefined()
+  const ui = await $.ui.mount(franja())
+  expect((await ui.find({ type: 'Text' }))?.text).toBe('🔴 sem 85%/80%')
+  await ui.unmount()
   expect((await $.prompt.submit(prompt('x'))).drop).toBeDefined()
 })
 
@@ -288,6 +319,75 @@ test('a mitad de la tarea, el aviso llega con el siguiente resultado de herramie
 test('con Claude Code en inglés, la interfaz sale en inglés', async ($, on) => {
   const pantalla = motor(on, [{ kind: 'seven_day', percentUsed: 82 }], {}, 'english')
   await $.session.start(arrancar)
-  expect(pantalla.status).toBe('braked · week 82% · cap 80% · /cuotaweek 90 to go on')
   expect((await $.prompt.submit(prompt('more'))).drop).toMatch(/reached its cap/)
+  const ui = await $.ui.mount(franja())
+  expect((await ui.find({ type: 'Text' }))?.text).toBe('🔴 wk 82%/80% · message held')
+  expect((await ui.find({ key: 'recargar' }))?.props.label).toBe('↩ Message')
+  await ui.press({ key: 'ocultar' })
+  expect(pantalla.status).toBe('braked · week 82% · cap 80% · /cuotaweek 90 to go on')
+  await ui.unmount()
+})
+
+test('lejos del límite no hay franja y la línea de estado queda como siempre', async ($, on) => {
+  const pantalla = motor(on, [{ kind: 'seven_day', percentUsed: 50 }])
+  await $.session.start(arrancar)
+  expect(pantalla.status).toMatch(/semana 50%/)
+  const ui = await $.ui.mount(franja())
+  expect(await ui.find({ key: 'ocultar' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('cerca del límite la franja avisa en amarillo y +5% sube el límite de la ventana que manda', async ($, on) => {
+  const pantalla = motor(on, [{ kind: 'seven_day', percentUsed: 91 }], {
+    politicas: { '/proyectos/cliente': { semana: 95, ruta: '/proyectos/cliente', desde: '2026-10-24' } },
+  })
+  await $.session.start(arrancar)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount(franja(surface))
+    expect((await ui.find({ type: 'Text' }))?.text).toBe('🟡 sem 91%/95%')
+    expect(await ui.find({ key: 'recargar' })).toBeUndefined()
+    await ui.unmount()
+  }
+  const ui = await $.ui.mount(franja())
+  await ui.press({ key: 'mas' })
+  await ui.unmount()
+  expect((await $.command.run(semanal(''))).text).toContain('Semana: 91% usado · sin límite')
+  expect(pantalla.status).toMatch(/semana 91%/)
+})
+
+test('el mensaje detenido vuelve a la caja con ↩ Mensaje y la franja cuenta sus adjuntos', async ($, on) => {
+  const pantalla = motor(on, [{ kind: 'seven_day', percentUsed: 82 }])
+  await $.session.start(arrancar)
+  const detenido = await $.prompt.submit({ ...prompt('revisa el informe'), attachments: [{ type: 'image' }, { type: 'document' }] })
+  expect(detenido.drop).toBeDefined()
+
+  const ui = await $.ui.mount(franja())
+  expect((await ui.find({ type: 'Text' }))?.text).toBe('🔴 sem 82%/80% · mensaje detenido (2 adj.: pégalos de nuevo)')
+  expect((await ui.find({ key: 'recargar' }))?.props.label).toBe('↩ Mensaje')
+
+  // Con la caja vacía lo pone tal cual; el botón se va porque ya no hay mensaje detenido.
+  await ui.press({ key: 'recargar' })
+  expect(pantalla.caja).toBe('revisa el informe')
+  expect(await ui.find({ key: 'recargar' })).toBeUndefined()
+  await ui.unmount()
+
+  // Con algo escrito en la caja, lo agrega al final.
+  await $.prompt.submit(prompt('otro'))
+  pantalla.caja = 'nota: '
+  const ui2 = await $.ui.mount(franja())
+  await ui2.press({ key: 'recargar' })
+  expect(pantalla.caja).toBe('nota: otro')
+  await ui2.unmount()
+})
+
+test('la franja oculta vuelve al cambiar de estado', async ($, on) => {
+  const pantalla = motor(on, [{ kind: 'seven_day', percentUsed: 82 }])
+  await $.session.start(arrancar)
+  const ui = await $.ui.mount(franja())
+  await ui.press({ key: 'ocultar' })
+  expect(pantalla.status).toMatch(/^frenado/)
+  await $.command.run(semanal('85'))
+  expect(pantalla.status).toBeUndefined()
+  expect((await ui.find({ type: 'Text' }))?.text).toBe('🟡 sem 82%/85%')
+  await ui.unmount()
 })

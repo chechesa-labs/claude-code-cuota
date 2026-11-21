@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- A one-line band above the message box, near the cap, at the cap or when a message was held: `🟡` or `🔴`, the usage and cap of each window (`5 h 3%/80% · wk 89%/85%`), and buttons. It takes the place of the status line while it shows.
+- `+5%` raises this folder's cap on the window that brakes by 5 points.
+- `↩ Message` puts the held message back in the box (at the end, if you already typed something). Pasted images and files cannot be put back: the band says how many there were so you can paste them again. The text is kept in memory for that session only, never written to disk or sent.
+- `Hide` hides the band until the state changes or another message is held; the status line comes back meanwhile.
+
 ## 0.2.2 (2026-10-29)
 
 - The wind-down notice no longer lives in the system prompt, where every change of its text rewrote the prompt cache of the whole conversation. It now travels as context Claude reads next to the next tool result (so it arrives in the middle of a task) or next to the user's message, once per change of state, and once more after a compaction.

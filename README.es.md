@@ -121,7 +121,7 @@ Se ajusta al instalar, o después en `/config`:
 | --- | --- |
 | `session.start` | Registra los comandos, ubica la carpeta y toma la primera lectura |
 | `session.measure` | Toma cada lectura nueva, actualiza la línea de estado y la envía al webhook si hay uno |
-| `command.run` | Responde `/cuota`, `/cuotasemanal` y `/cuotaweek` |
+| `command.run` | Responde solo sus propios comandos, `/cuota`, `/quota`, `/cuotasemanal` y `/cuotaweek`, con texto. Nunca ejecuta un comando, una herramienta ni nada que reciba del webhook o de la red: Cuota no lee la respuesta del webhook |
 | `tool.call` | Cuando cambia el estado, adjunta el aviso para Claude al siguiente resultado de herramienta, para que lo lea a mitad de la tarea; no cambia la herramienta ni su resultado |
 | `prompt.submit` | En el límite, detiene los mensajes nuevos de esa carpeta con una nota de cómo subir el límite, y guarda en memoria el texto detenido para el botón `↩ Mensaje`. Cuando cambia el estado, adjunta el aviso para Claude junto al mensaje. Nunca cambia el texto de un mensaje, y los comandos, los mensajes enviados durante un turno y los avisos de tareas siempre pasan |
 | `session.compact` | Después de compactar, vuelve a mandar el aviso vigente, por si el resumen lo perdió |

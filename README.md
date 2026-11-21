@@ -121,7 +121,7 @@ Set them when installing, or later in `/config`:
 | --- | --- |
 | `session.start` | Registers the commands, finds the folder and takes the first reading |
 | `session.measure` | Takes each new reading, updates the status line and sends it to the webhook if one is set |
-| `command.run` | Answers `/cuota`, `/cuotasemanal` and `/cuotaweek` |
+| `command.run` | Answers only its own commands, `/cuota`, `/quota`, `/cuotasemanal` and `/cuotaweek`, with text. It never runs a command, a tool or anything it receives from the webhook or the network: Cuota does not read the webhook's response |
 | `tool.call` | When the state changes, attaches the notice for Claude to the next tool result, so it reads it in the middle of a task; it changes neither the tool nor its result |
 | `prompt.submit` | At the cap, holds new messages in that folder with a note on how to raise the cap, and keeps the held text in memory for the `↩ Message` button. When the state changes, attaches the notice for Claude next to the message. It never changes the text of a message, and commands, messages sent during a turn and task notifications always go through |
 | `session.compact` | After a compaction, sends the current notice again, in case the summary dropped it |

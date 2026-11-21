@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-11-20)
 
 - Every folder at once, for a while: `/cuotaweek 90-temp *` (`/cuotasemanal 90-temporal *` in Spanish, `/cuota` for the 5-hour window) raises the default cap of every folder until the window resets, then it goes back by itself. Folders with their own cap keep it. `/cuotaweek default-temp *` sets it back sooner. Shared by every session.
 - **Changed:** "every folder" and "above 80%" are now symbols, `*` and `>80`: `/cuota default *`, `/cuota default >80`. Words after the number are always folder names, so a project named `all` or `todas` is no longer mistaken for every folder. `default all`, `default todas`, `default over-80` and `default sobre-80` now look for a folder with that name and change nothing if there is none. `/cuota all` no longer lists the folders: use `/cuota list`.
